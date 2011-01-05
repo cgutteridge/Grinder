@@ -10,6 +10,7 @@ use Getopt::Long;
 # --config
 # --in
 # --format
+# --worksheet
 # --out
 # --xslt
 
@@ -22,7 +23,10 @@ use Getopt::Long;
 # --help
 # --version
 
-my %options = ( config=>[], set=>[], delineator=>[], noise=>1, in=>"-", out=>"-", xslt=>"", format=>"csv" );
+my %options = ( 
+	config=>[], 	set=>[], 	delineator=>[], 
+	noise=>1, 	in=>undef, 	out=>undef, 
+	xslt=>undef, 	format=>undef,	worksheet=>undef, );
 
 Getopt::Long::Configure("permute");
 
@@ -41,6 +45,7 @@ GetOptions(
 	'out=s' => \$options{"out"},
 	'xslt=s' => \$options{"xslt"},
 	'format=s' => \$options{"format"},
+	'worksheet=i' => \$options{"worksheet"},
 
 	'config=s' => $options{"config"},
 	'set=s' => $options{"set"},
@@ -83,6 +88,7 @@ use warnings;
 # out (default -)
 # xslt
 # format (default csv)
+# worksheet (default 1), excel format only
 # config = [] or $
 # noise (default 1)
 
@@ -93,10 +99,6 @@ sub new
 	my $self = bless { 
 		set=>{}, 
 		delineator=>{},
-		format=>"csv",
-		noise=>1,
-		in=>"-",
-		out=>"-",
 	}, $class;
 
 	# normal options
@@ -110,7 +112,7 @@ sub new
 	{
 		foreach my $config_file ( @{$options{config}} )
 		{
-			my $config_fh = $self->open_file( $config_file, "<:utf8" );
+			my $config_fh = $self->open_input_file( $config_file );
 			my $line_no = 0;
 			while( my $line = readline( $config_fh ) )
 			{
@@ -136,8 +138,8 @@ sub new
 					next;
 				}
 						
-				$self->warning( "Syntax error in config file '$config_file' at line #$line_no.", 1 );
-				$self->warning( "Line #$line_no: $line", 2 );
+				$self->message( "Syntax error in config file '$config_file' at line #$line_no.", 1 );
+				$self->message( "Line #$line_no: $line", 2 );
 			}
 
 			close( $config_fh );
@@ -171,18 +173,66 @@ sub new
 
 	}
 
+	$self->{format} = "csv" unless defined $self->{format};
+	$self->{noise} = 1 unless defined $self->{noise};
+	$self->{in} = "-" unless defined $self->{in};
+	$self->{out} = "-" unless defined $self->{out};
+	$self->{tmp_dir} = "/tmp" unless defined $self->{tmp_dir};
+
 	return $self;
 }
 
-sub open_file
+sub open_input_file
 {
-	my( $self, $filename, $mode ) = @_;
+	my( $self, $filename ) = @_;
 
 	my $fh;
-	open( $fh, $mode, $filename ) || $self->error( "Failed to open '$filename' as '$mode': $!" );
+
+	if( $filename eq "-" )
+	{
+		$fh = *STDIN;
+		binmode( $fh, ":utf8" );
+	}
+	else
+	{
+		open( $fh, "<:utf8", $filename ) || $self->error( "Failed to open '$filename' for reading: $!" );
+	}
+	$self->message( "Opened '$filename' for reading.", 2 );
 
 	return $fh;
 }
+
+sub open_output_file
+{
+	my( $self, $filename ) = @_;
+
+	my $fh;
+
+	if( $filename eq "-" )
+	{
+		$fh = *STDOUT;
+		binmode( $fh, ":utf8" );
+	}
+	else
+	{
+		open( $fh, ">:utf8", $filename ) || $self->error( "Failed to open '$filename' for writing: $!" );
+	}
+	$self->message( "Opened '$filename' for writing.", 2 );
+
+	return $fh;
+}
+
+sub close_file
+{
+	my( $self, $file_handle, $filename ) = @_;
+
+	if( !close( $file_handle ) ) 
+	{
+		$self->message( "Could not close a file handle on $filename: $!", 1 );
+	}
+	$self->message( "Closed '$filename'.", 2 );
+}
+
 
 sub debug
 {
@@ -200,13 +250,13 @@ sub error
 	exit 1;
 }
 
-sub warning
+sub message
 {
 	my( $self, $msg, $priority ) = @_;
 
 	if( $priority <= $self->{noise} )
 	{
-		print STDERR "Grinder Warning: $msg\n";
+		print STDERR "$msg\n";
 	}
 }
 
@@ -216,11 +266,33 @@ sub grind
 
 	# could take extra options to over-ride current ones, esp in & out
 
-	#  TODO:open source document
-	#  TODO:csv,psv,excel
-	#  TODO:open target for XML (tmp or in)
-	
-	#  TODO:convert to XML 
+	my $in_fh = $self->open_input_file( $self->{in} );
+
+	my $xml_file;
+	if( defined $self->{xslt} && $self->{xslt} ne "" )
+	{
+		$xml_file = $self->{tmp_dir}."/grinder.$$.xml";
+	}
+	else
+	{
+		$xml_file = $self->{out};
+	}
+
+	my $xml_out_fh = $self->open_output_file( $xml_file );
+
+	if( $self->{format} eq "excel" ) { $self->process_excel( $in_fh, $xml_out_fh ); }
+	elsif( $self->{format} eq "csv" ) { $self->process_csv( $in_fh, $xml_out_fh ); }
+	elsif( $self->{format} eq "tsv" ) { $self->process_tsv( $in_fh, $xml_out_fh ); }
+	elsif( $self->{format} eq "psv" ) { $self->process_psv( $in_fh, $xml_out_fh ); }
+	else { $self->error( "Unknown format '".$self->{format}."'" ); }
+
+	$self->close_file( $xml_out_fh, $xml_file );
+	$self->close_file( $in_fh, $self->{in} );
+
+	#  TODO:csv
+	# TODO:psv
+	# TODO:tsv
+
 	
 	#  TODO:end or
 	
@@ -229,4 +301,112 @@ sub grind
 	#  TODO:spawn xslt bin
 	
 	#  TODO:insert boilerplate and stream to out
+}
+
+sub process_row
+{
+	my( $self, $out, $cells ) = @_;
+
+	# Skip empty rows
+	my $empty = 1;
+	foreach my $cell ( @{$cells} )
+	{
+		if( defined $cell && $cell ne "" ) { $empty = 0; last; }
+	}
+	return if( $empty );
+
+	# *STAR directive fields
+	if( substr( $cells->[0],0,1 ) eq "*" )
+	{
+		if( $cells->[0] eq "*SET" )
+		{
+			$self->{parse}->{set}->{$cells->[1]} = $cells->[2];
+			print "SET:!!\n";
+		}
+		else
+		{
+			$self->message( "Unknown * directive: ".$cells->[0] );
+		}
+		return;
+	}
+
+	# Read headings
+	if( !defined $self->{parse}->{fields} )
+	{
+		my $fields = {};
+		foreach my $cell ( @{$cells} )
+		{
+			if( !defined $cell ) 
+			{
+				push @{$self->{parse}->{fields}}, undef;
+				next;
+			}
+			$cell =~ s/^\s+//;
+			$cell =~ s/\s+$//;
+			if( $cell eq "" )
+			{
+				push @{$self->{parse}->{fields}}, undef;
+				next;
+			}
+			if( defined $fields->{$cell} )
+			{
+				$self->message( "Duplicate column heading '$cell'", 1 );
+				next;
+			}
+			push @{$self->{parse}->{fields}}, $cell;
+			$fields->{$cell} = 1;
+		}
+		return;
+	}
+	
+	print "DATA ROW\n";
+	print Dumper( $self->{parse}->{fields} );			
+	#  TODO:convert to XML 
+	# TODO:process_row
+
+	# TODO:fields
+	# TODO:data row
+}
+
+sub process_excel
+{
+	my( $self, $in, $out ) = @_;
+
+	if( ! eval 'use Spreadsheet::ParseExcel; 1;' ) 
+	{
+		$self->error( "Failed to load Perl Module: Spreadsheet::ParseExcel" );
+	}
+
+	my $parser = Spreadsheet::ParseExcel->new();
+	my $workbook = $parser->parse( $in );
+	if ( !defined $workbook ) 
+	{
+		$self->error( "Failed to parse Excel file: ".$parser->error() );
+	}
+
+	my $n = $self->{worksheet} || 1;
+	my @worksheets = $workbook->worksheets();
+	if( !defined $worksheets[$n-1] )
+	{
+		$self->error( "Workbook does not have a worksheet #$n" );
+	}
+	my $worksheet = $worksheets[$n-1];
+
+	my ( $row_min, $row_max ) = $worksheet->row_range();
+	my ( $col_min, $col_max ) = $worksheet->col_range();
+
+	for my $row ( $row_min .. $row_max ) 
+	{
+		my @cells = ();
+		for my $col ( 0 .. $col_max ) 
+		{
+			my $cell = $worksheet->get_cell( $row, $col );
+			my $v;
+			if( $cell ) { $v = $cell->value(); };
+			push @cells, $v;
+		}
+		$self->process_row( $out, \@cells );
+	}
+}
+
 
