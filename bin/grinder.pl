@@ -55,27 +55,12 @@ $options{noise} = 1+$verbose if( $verbose );
 
 # TODO: Print usage
 # TODO: Print version
-use Data::Dumper;
-print Dumper( \%options );
 
 my $grinder = new Grinder( %options );
-$grinder->debug();
 
-#  TODO:open source document
-#  TODO:open target for XML (tmp or in)
+$grinder->grind();
 
-#  TODO:convert to XML 
-
-#  TODO:end or
-
-#  TODO:open tmp document
-#  TODO:open target for RDF
-#  TODO:spawn xslt bin
-
-#  TODO:insert boilerplate and stream to out
-
-
-
+exit;
 
 
 
@@ -104,7 +89,7 @@ use warnings;
 sub new
 {
 	my( $class, %options ) = @_;
-print Dumper( \%options );
+
 	my $self = bless { 
 		set=>{}, 
 		delineator=>{},
@@ -114,11 +99,48 @@ print Dumper( \%options );
 		out=>"-",
 	}, $class;
 
+	# normal options
+	foreach my $opt_key ( keys %options )
+	{
+		next if( $opt_key eq "set" || $opt_key eq "delineator" );
+		$self->{$opt_key} = $options{$opt_key};
+	}
+
 	if( $options{config} )
 	{
-		foreach my $config_fn ( @{$options{config}} )
+		foreach my $config_file ( @{$options{config}} )
 		{
-			#  TODO:read config file into $self
+			my $config_fh = $self->open_file( $config_file, "<:utf8" );
+			my $line_no = 0;
+			while( my $line = readline( $config_fh ) )
+			{
+				$line_no++;	
+				chomp $line;
+				next if( $line =~ m/^\s*$/ );
+				next if( $line =~ m/^\s*#/ );
+				if( $line =~ m/^\s*([^:]+):\s*(.*)$/ )
+				{
+					my( $left, $right ) = ( $1, $2 );
+					$right=~s/\s*$//;
+					if( $left eq "set" || $left eq "delineator" )
+					{
+						my( $id, $value ) = split( /=/, $right );
+						$self->{$left}->{$id} = $value;
+					}
+					elsif( !defined $options{$left} )
+					{
+						# second definition in a config over-writes
+						# but does not over-write passed-in option
+						$self->{$left} = $right;
+					}
+					next;
+				}
+						
+				$self->warning( "Syntax error in config file '$config_file' at line #$line_no.", 1 );
+				$self->warning( "Line #$line_no: $line", 2 );
+			}
+
+			close( $config_fh );
 		}
 	}
 
@@ -147,10 +169,19 @@ print Dumper( \%options );
 			next;
 		}
 
-		$self->{$opt_key} = $v;
 	}
 
 	return $self;
+}
+
+sub open_file
+{
+	my( $self, $filename, $mode ) = @_;
+
+	my $fh;
+	open( $fh, $mode, $filename ) || $self->error( "Failed to open '$filename' as '$mode': $!" );
+
+	return $fh;
 }
 
 sub debug
@@ -169,4 +200,33 @@ sub error
 	exit 1;
 }
 
+sub warning
+{
+	my( $self, $msg, $priority ) = @_;
+
+	if( $priority <= $self->{noise} )
+	{
+		print STDERR "Grinder Warning: $msg\n";
+	}
+}
+
+sub grind
+{
+	my( $self ) = @_;
+
+	# could take extra options to over-ride current ones, esp in & out
+
+	#  TODO:open source document
+	#  TODO:csv,psv,excel
+	#  TODO:open target for XML (tmp or in)
+	
+	#  TODO:convert to XML 
+	
+	#  TODO:end or
+	
+	#  TODO:open tmp document
+	#  TODO:open target for RDF
+	#  TODO:spawn xslt bin
+	
+	#  TODO:insert boilerplate and stream to out
 
