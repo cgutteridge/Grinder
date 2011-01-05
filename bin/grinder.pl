@@ -1,28 +1,14 @@
 #!/usr/bin/perl
 
+# License: GPL
+# Copyright: University of Southampton 2011
+# Author: Christopher Gutteridge; http://id.ecs.soton.ac.uk/person/1248
+
+
 use strict;
 use warnings;
 
 use Getopt::Long;
-
-# options
-
-# --config
-# --in
-# --format
-# --worksheet
-# --out
-# --xslt
-
-# --set x=y
-# --delineator x=y
-# --include
-
-# --verbose
-# --quiet
-
-# --help
-# --version
 
 my %options = ( 
 	config=>[], 	set=>[], 	delineator=>[], 
@@ -55,15 +41,15 @@ GetOptions(
 	'set=s' => $options{"set"},
 	'delineator=s' => $options{"delineator"},
 ) || show_usage();
+
 show_version() if $show_version;
-show_usage( 1 ) if $show_help;
+
+show_help() if $show_help;
+
 show_usage() if( scalar @ARGV != 0 ); 
 
 $options{noise} = 0 if( $quiet );
 $options{noise} = 1+$verbose if( $verbose );
-
-# TODO: Print usage
-# TODO: Print version
 
 my $grinder = new Grinder( %options );
 
@@ -71,14 +57,80 @@ $grinder->grind();
 
 exit;
 
+          ############################################################
+
+sub show_version
+{
+	print STDERR "Grinder: version XYZ\n";	
+	exit;
+}
+
+sub show_usage
+{
+	print STDERR <<END;
+Usage: $0 [OPTION]... [--in filename] [--out filename] [--xslt filename]
+Usage: $0 [OPTION]... [--config filename] 
+
+$0 --help for more information.
+END
+	exit 1;
+}
+
+sub show_help
+{
+	print STDERR <<END;
+Usage: $0 [OPTION]... [--in filename] [--out filename] [--xslt filename]
+Usage: $0 [OPTION]... [--config filename] 
+
+ --config <filename>    Load options from a config file, although command
+                         line options override.
+
+ --in <filename>        File to load spreadsheet from. Default "-" (stdin)
+
+ --format <format>      Format of spreadsheet.
+                         csv (default) - Comma separated values
+                         tsv - Tab separated values
+                         psv - Pipe character separated values (eg. biztalk)
+                         excel - Excel document (.xsl NOT .xslx)
+ --worksheet <number>   For multi sheet files, which sheet (default 1)
+
+ --out <filename>       File to output result to. Default "-" (stdout)
+
+ --xslt <filename>      If specified, run the XML generated throught this 
+                         XSLT transform and output that.
+
+ --set <x>=<y>          Set a variable in the intermediate stage XML, sets 
+                         <set id='x'>y</set>. This overrides values set in
+                         config file(s) but is overridden by values set 
+                         using *SET in the input data.
+
+ --delineator <x>=<y>   Set a character <y> to use to split data in cells 
+                         in a column with heading <x>.
+                               
+ --include <filename>   Include the XML from <filename> at the top of the XML
+                         output from the XSLT. Has no affect if xslt is not
+                         set. Also assumes that the XSLT will add a 
+                         <!--TOP--> to the XML it produces that can be used 
+                         as the hook to insert the <filename> data.
+
+ --verbose              Include more debug information. May be repeated for 
+                         even more information.
+
+ --quiet                Supress even normal warnings (but not errors).
+
+ --help                 Show this help and exit.
+
+ --version              Show the Grinder version and exit.
+
+END
+	exit;
+}
 
 
+          ############################################################
+          ############################################################
+          ############################################################
 
-
-
-
-
-#########################
 
 package Grinder;
 
@@ -529,4 +581,4 @@ sub process_excel
 	}
 }
 
-
+1;
