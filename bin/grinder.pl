@@ -7,21 +7,59 @@ use Getopt::Long;
 
 # options
 
-# --verbose
-# --quiet
 # --config
 # --in
 # --format
 # --out
 # --xslt
+
 # --set x=y
 # --delineator x=y
 
-my %options = ();
+# --verbose
+# --quiet
 
+# --help
+# --version
 
+my %options = ( config=>[], set=>[], delineator=>[], noise=>1, in=>"-", out=>"-", xslt=>"", format=>"csv" );
 
-# TODO: read command line options
+Getopt::Long::Configure("permute");
+
+my $show_help;
+my $show_version;
+my $verbose;
+my $quiet;
+GetOptions( 
+	'help|?' => \$show_help,
+	'version' => \$show_version,
+
+	'verbose+' => \$verbose,
+	'quiet' => \$quiet,
+
+	'in=s' => \$options{"in"},
+	'out=s' => \$options{"out"},
+	'xslt=s' => \$options{"xslt"},
+	'format=s' => \$options{"format"},
+
+	'config=s' => $options{"config"},
+	'set=s' => $options{"set"},
+	'delineator=s' => $options{"delineator"},
+) || show_usage();
+show_version() if $show_version;
+show_usage( 1 ) if $show_help;
+show_usage() if( scalar @ARGV != 0 ); 
+
+$options{noise} = 0 if( $quiet );
+$options{noise} = 1+$verbose if( $verbose );
+
+# TODO: Print usage
+# TODO: Print version
+use Data::Dumper;
+print Dumper( \%options );
+
+my $grinder = new Grinder( %options );
+$grinder->debug();
 
 #  TODO:open source document
 #  TODO:open target for XML (tmp or in)
@@ -36,6 +74,16 @@ my %options = ();
 
 #  TODO:insert boilerplate and stream to out
 
+
+
+
+
+
+
+
+
+
+
 #########################
 
 package Grinder;
@@ -43,11 +91,28 @@ package Grinder;
 use strict;
 use warnings;
 
+# set = {} or [] or $
+# delineator = {} or [] or $
+
+# in (default -)
+# out (default -)
+# xslt
+# format (default csv)
+# config = [] or $
+# noise (default 1)
+
 sub new
 {
 	my( $class, %options ) = @_;
-
-	my $self = bless {}, $class;
+print Dumper( \%options );
+	my $self = bless { 
+		set=>{}, 
+		delineator=>{},
+		format=>"csv",
+		noise=>1,
+		in=>"-",
+		out=>"-",
+	}, $class;
 
 	if( $options{config} )
 	{
@@ -61,16 +126,31 @@ sub new
 	foreach my $opt_key ( keys %options )
 	{
 		my $v = $options{$opt_key};
-		if( ref( $v ) eq "ARRAY" )
+		if( $opt_key eq "set" || $opt_key eq "delineator" )
 		{
-			$self->{$opt_key} = [] if( ! defined $self->{$opt_key} );
-			push @{ $self->{$opt_key} }, @{$v};
+			$v = [ $v ] if( ref( $v ) eq "" );	
+			if( ref( $v ) eq "ARRAY" )
+			{
+				foreach my $touple ( @{$v} )
+				{
+					my( $id, $value ) = split( /=/, $touple );
+					$self->{$opt_key}->{$id} = $value;
+				}
+			}
+			else
+			{
+				foreach my $id ( keys %{$v} )
+				{
+					$self->{$opt_key}->{$id} = $v->{$id};
+				}
+			}
+			next;
 		}
-		else
-		{
-			$self->{$opt_key} = $v;
-		}
+
+		$self->{$opt_key} = $v;
 	}
+
+	return $self;
 }
 
 sub debug

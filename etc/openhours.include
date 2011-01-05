@@ -1,0 +1,21 @@
+
+  <rdf:Description rdf:about='http://id.southampton.ac.uk/catering/generic-offerings/Snacks'>
+    <rdfs:label>Snacks</rdfs:label>
+  </rdf:Description>
+  
+  <rdf:Description rdf:about='http://id.southampton.ac.uk/catering/generic-offerings/Light-Meals'>
+    <rdfs:label>Light Meals</rdfs:label>
+  </rdf:Description>
+  
+  <rdf:Description rdf:about='http://id.southampton.ac.uk/catering/generic-offerings/Main-Meals'>
+    <rdfs:label>Main Meals</rdfs:label>
+  </rdf:Description>
+  
+  <rdf:Description rdf:about='http://id.southampton.ac.uk/catering/generic-offerings/Hot-Drinks'>
+    <rdfs:label>Hot Drinks</rdfs:label>
+  </rdf:Description>
+  
+  <rdf:Description rdf:about='http://id.southampton.ac.uk/catering/generic-offerings/Alcohol'>
+    <rdfs:label>Alcohol</rdfs:label>
+  </rdf:Description>
+
