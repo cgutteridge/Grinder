@@ -329,6 +329,16 @@ sub grind
 
 
 	# Output end of XML file
+	for my $set_id ( keys %{$self->{set}} )
+	{
+		my $value = $self->{set}->{$set_id};
+		$value =~ s/&/&amp;/g;
+		$value =~ s/>/&gt;/g;
+		$value =~ s/</&lt;/g;
+		$value =~ s/"/&quot;/g;
+		print { $xml_out_fh } "  <set id='$set_id'>$value</set>\n";
+	}
+
 	print { $xml_out_fh } <<END;
 </grinder-data>
 END
