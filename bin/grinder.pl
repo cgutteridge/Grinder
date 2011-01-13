@@ -57,7 +57,7 @@ $grinder->grind();
 
 exit;
 
-          ############################################################
+		  ############################################################
 
 sub show_version
 {
@@ -68,7 +68,7 @@ sub show_version
 sub show_usage
 {
 	print STDERR <<END;
-Usage: $0 [OPTION]... [--in filename] [--out filename] [--xslt filename]
+Usage: $0 [OPTION]... [--in filename|url] [--out filename] [--xslt filename]
 Usage: $0 [OPTION]... [--config filename] 
 
 $0 --help for more information.
@@ -82,54 +82,57 @@ sub show_help
 Usage: $0 [OPTION]... [--in filename] [--out filename] [--xslt filename]
 Usage: $0 [OPTION]... [--config filename] 
 
- --config <filename>    Load options from a config file, although command
-                         line options override.
+ --config <filename>	Load options from a config file, although command
+						 line options override.
 
- --in <filename>        File to load spreadsheet from. Default "-" (stdin)
+ --in <filename|url>	File to load spreadsheet from. Default "-" (stdin),
+						 or if it starts with http: or https: then it is 
+						 treaded as a URL.
 
- --format <format>      Format of spreadsheet.
-                         csv (default) - Comma separated values
-                         tsv - Tab separated values
-                         psv - Pipe character separated values (eg. biztalk)
-                         excel - Excel document (.xsl NOT .xslx)
+ --format <format>	  Format of spreadsheet.
+						 csv (default) - Comma separated values
+						 tsv - Tab separated values
+						 psv - Pipe character separated values (eg. biztalk)
+						 excel - Excel document (.xsl NOT .xslx)
+						 colon - Colon-separated (eg. passwd)
  --worksheet <number>   For multi sheet files, which sheet (default 1)
 
- --out <filename>       File to output result to. Default "-" (stdout)
+ --out <filename>	   File to output result to. Default "-" (stdout)
 
- --xslt <filename>      If specified, run the XML generated throught this 
-                         XSLT transform and output that.
+ --xslt <filename>	  If specified, run the XML generated throught this 
+						 XSLT transform and output that.
 
- --set <x>=<y>          Set a variable in the intermediate stage XML, sets 
-                         <set id='x'>y</set>. This overrides values set in
-                         config file(s) but is overridden by values set 
-                         using *SET in the input data.
+ --set <x>=<y>		  Set a variable in the intermediate stage XML, sets 
+						 <set id='x'>y</set>. This overrides values set in
+						 config file(s) but is overridden by values set 
+						 using *SET in the input data.
 
  --delineator <x>=<y>   Set a character <y> to use to split data in cells 
-                         in a column with heading <x>.
-                               
+						 in a column with heading <x>.
+							   
  --include <filename>   Include the XML from <filename> at the top of the XML
-                         output from the XSLT. Has no affect if xslt is not
-                         set. Also assumes that the XSLT will add a 
-                         <!--TOP--> to the XML it produces that can be used 
-                         as the hook to insert the <filename> data.
+						 output from the XSLT. Has no affect if xslt is not
+						 set. Also assumes that the XSLT will add a 
+						 <!--TOP--> to the XML it produces that can be used 
+						 as the hook to insert the <filename> data.
 
- --verbose              Include more debug information. May be repeated for 
-                         even more information.
+ --verbose			  Include more debug information. May be repeated for 
+						 even more information.
 
- --quiet                Supress even normal warnings (but not errors).
+ --quiet				Supress even normal warnings (but not errors).
 
- --help                 Show this help and exit.
+ --help				 Show this help and exit.
 
- --version              Show the Grinder version and exit.
+ --version			  Show the Grinder version and exit.
 
 END
 	exit;
 }
 
 
-          ############################################################
-          ############################################################
-          ############################################################
+		  ############################################################
+		  ############################################################
+		  ############################################################
 
 
 package Grinder;
@@ -352,7 +355,28 @@ sub grind
 
 	# could take extra options to over-ride current ones, esp in & out
 
-	my $in_fh = $self->open_input_file( $self->{in} );
+	my $in_fh;
+	my $in_file = $self->{in};
+	if( $self->{in} =~ m/^https?:/ )
+	{
+		$in_file = $self->{tmp_dir}."/grinder.in$$.xml";
+		if( ! eval 'use LWP::UserAgent; 1;' ) 
+		{
+			$self->error( "Failed to load Perl Module: LWP::UserAgent" );
+		}	
+		my $ua = LWP::UserAgent->new;
+
+		my $req = HTTP::Request->new( GET => $self->{in} );
+		my $res = $ua->request( $req );
+		if( !$res )
+		{
+			$self->error( "Failed to load URL '".$self->{in}."': ".$res->status_line );
+		}	
+		my $in_file_out_fh = $self->open_output_file( $in_file ); # shake it all about
+		print { $in_file_out_fh } $res->content;
+		$self->close_file( $in_file_out_fh, $in_file );
+	}
+	$in_fh = $self->open_input_file( $in_file );
 
 	my $xml_file;
 	if( defined $self->{xslt} && $self->{xslt} ne "" )
@@ -372,13 +396,9 @@ sub grind
 	if( $self->{format} eq "excel" ) { $self->process_excel( $in_fh, $xml_out_fh ); }
 	elsif( $self->{format} eq "csv" ) { $self->process_csv( $in_fh, $xml_out_fh ); }
 	elsif( $self->{format} eq "tsv" ) { $self->process_tsv( $in_fh, $xml_out_fh ); }
+	elsif( $self->{format} eq "colon" ) { $self->process_colon( $in_fh, $xml_out_fh ); }
 	elsif( $self->{format} eq "psv" ) { $self->process_psv( $in_fh, $xml_out_fh ); }
 	else { $self->error( "Unknown format '".$self->{format}."'" ); }
-
-	#  TODO:csv
-	# TODO:psv
-	# TODO:tsv
-
 
 	# Output end of XML file
 	for my $set_id ( keys %{$self->{set}} )
@@ -397,6 +417,11 @@ END
 	$self->close_file( $xml_out_fh, $xml_file );
 	$self->close_file( $in_fh, $self->{in} );
 
+	# delete tmp file if input was from a URL
+	if( $self->{in} =~ m/^https?:/ )
+	{
+		$self->unlink_file( $in_file );
+	}
 
 
 	# If no XSLT then we are done
@@ -480,6 +505,7 @@ sub process_row
 			}
 			$cell =~ s/^\s+//;
 			$cell =~ s/\s+$//;
+			$cell = lc $cell;
 			if( $cell eq "" )
 			{
 				push @{$self->{parse}->{fields}}, undef;
@@ -490,6 +516,7 @@ sub process_row
 				$self->message( "Duplicate column heading '$cell'", 1 );
 				next;
 			}
+			$cell =~ s/\s/-/g;
 			push @{$self->{parse}->{fields}}, $cell;
 			$fields->{$cell} = 1;
 		}
@@ -532,7 +559,7 @@ END
 			$value =~ s/>/&gt;/g;
 			$value =~ s/</&lt;/g;
 			$value =~ s/"/&quot;/g;
-			print { $out } "    <$field>$value</$field>\n";
+			print { $out } "	<$field>$value</$field>\n";
 		}
 		$self->{parse}->{rows}++;
 	}
@@ -547,7 +574,7 @@ sub process_excel
 	if( ! eval 'use Spreadsheet::ParseExcel; 1;' ) 
 	{
 		$self->error( "Failed to load Perl Module: Spreadsheet::ParseExcel" );
-	}
+	}	
 
 	my $parser = Spreadsheet::ParseExcel->new();
 	my $workbook = $parser->parse( $in );
@@ -578,6 +605,54 @@ sub process_excel
 			push @cells, $v;
 		}
 		$self->process_row( $out, \@cells );
+	}
+}
+
+sub process_psv
+{
+	my( $self, $in, $out ) = @_;
+
+	while( my $line = readline( $in ) )
+	{
+		chomp $line;
+
+		$self->process_row( $out, [ split /\|/, $line ] );
+	}
+}
+
+sub process_colon
+{
+	my( $self, $in, $out ) = @_;
+
+	while( my $line = readline( $in ) )
+	{
+		chomp $line;
+
+		$self->process_row( $out, [ split /:/, $line ] );
+	}
+}
+
+sub process_csv
+{
+	my( $self, $in, $out ) = @_;
+
+	if( ! eval 'use Text::CSV; 1;' ) 
+	{
+		$self->error( "Failed to load Perl Module: Text::CSV" );
+	}	
+
+	my $csv = Text::CSV->new();
+
+	while( my $line = readline( $in ) )
+	{
+		if( !$csv->parse($line) ) 
+		{
+			my $err = $csv->error_input;
+			$self->message( "Failed to parse line: $err", 1 );
+			next;
+		}
+		
+		$self->process_row( $out, [ $csv->fields() ] );
 	}
 }
 

@@ -1,0 +1,10 @@
+ID:NAME:TYPE:PARENT
+UoS:University of Southampton:FormalOrganization,Institution
+fac1:Faculty of Business and Law:Faculty:UoS
+fac2:Faculty of Engineering and the Environment:Faculty:UoS
+fac3:Faculty of Health Sciences:Faculty:UoS
+fac4:Faculty of Humanities:Faculty:UoS
+fac5:Faculty of Medicine:Faculty:UoS
+fac6:Faculty of Natural and Environmental Sciences:Faculty:UoS
+fac7:Faculty of Physical and Applied Sciences:Faculty:UoS
+fac8:Faculty of Social and Human Sciences:Faculty:UoS
