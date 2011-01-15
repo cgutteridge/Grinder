@@ -1,4 +1,6 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -I perl_lib/
+
+# TODO: syntax in XSLT to check required constants are SET
 
 # License: GPL
 # Copyright: University of Southampton 2011
@@ -13,7 +15,7 @@ use Getopt::Long;
 my %options = ( 
 	config=>[], 	set=>[], 	delineator=>[], 
 	include=>[],
-	noise=>1, 	in=>undef, 	out=>undef, 
+	noise=>1, 	in=>[], 	out=>undef, 
 	xslt=>undef, 	format=>undef,	worksheet=>undef, 
 );
 
@@ -30,7 +32,7 @@ GetOptions(
 	'verbose+' => \$verbose,
 	'quiet' => \$quiet,
 
-	'in=s' => \$options{"in"},
+	'in=s' => $options{"in"},
 	'out=s' => \$options{"out"},
 	'xslt=s' => \$options{"xslt"},
 	'format=s' => \$options{"format"},
@@ -41,6 +43,7 @@ GetOptions(
 	'set=s' => $options{"set"},
 	'delineator=s' => $options{"delineator"},
 ) || show_usage();
+#use Data::Dumper;print Dumper( \%options );exit;
 
 show_version() if $show_version;
 
@@ -353,31 +356,6 @@ sub grind
 {
 	my( $self ) = @_;
 
-	# could take extra options to over-ride current ones, esp in & out
-
-	my $in_fh;
-	my $in_file = $self->{in};
-	if( $self->{in} =~ m/^https?:/ )
-	{
-		$in_file = $self->{tmp_dir}."/grinder.in$$.xml";
-		if( ! eval 'use LWP::UserAgent; 1;' ) 
-		{
-			$self->error( "Failed to load Perl Module: LWP::UserAgent" );
-		}	
-		my $ua = LWP::UserAgent->new;
-
-		my $req = HTTP::Request->new( GET => $self->{in} );
-		my $res = $ua->request( $req );
-		if( !$res )
-		{
-			$self->error( "Failed to load URL '".$self->{in}."': ".$res->status_line );
-		}	
-		my $in_file_out_fh = $self->open_output_file( $in_file ); # shake it all about
-		print { $in_file_out_fh } $res->content;
-		$self->close_file( $in_file_out_fh, $in_file );
-	}
-	$in_fh = $self->open_input_file( $in_file );
-
 	my $xml_file;
 	if( defined $self->{xslt} && $self->{xslt} ne "" )
 	{
@@ -393,17 +371,93 @@ sub grind
 	$self->{parse} = { rows=>0, set=>{} };	
 	foreach my $k ( keys %{ $self->{set} } ) { $self->{parse}->{set}->{$k} = $self->{set}->{$k}; }
 
-	if( $self->{format} eq "excel" ) { $self->process_excel( $in_fh, $xml_out_fh ); }
-	elsif( $self->{format} eq "csv" ) { $self->process_csv( $in_fh, $xml_out_fh ); }
-	elsif( $self->{format} eq "tsv" ) { $self->process_tsv( $in_fh, $xml_out_fh ); }
-	elsif( $self->{format} eq "colon" ) { $self->process_colon( $in_fh, $xml_out_fh ); }
-	elsif( $self->{format} eq "psv" ) { $self->process_psv( $in_fh, $xml_out_fh ); }
-	else { $self->error( "Unknown format '".$self->{format}."'" ); }
+	my $ins = $self->{in};
+	if( ref($ins) ne "ARRAY" ) { $ins = [$ins]; }
+
+	foreach my $in ( @{$ins} )
+	{
+		if( $in =~ m/;/ )
+		{
+			my @parts = split( /;/, $in );
+			$in = { file=>shift @parts };
+			foreach my $part ( @parts )
+			{
+				my( $k, $v ) = split( '=', $part );
+				$in->{$k} = $v;
+			}
+		}
+	}
+	my $xmlns = { g=>"http://purl.org/openorg/grinder/ns/" };
+	my $ns = 0;
+	foreach my $in ( @{$ins} )
+	{
+		if( ref( $in ) eq "HASH" )
+		{
+			if( defined $in->{namespace} )
+			{
+				$in->{prefix} = "ns".($ns++);
+				$xmlns->{$in->{prefix}} = "http://purl.org/openorg/grinder/ns/".$in->{namespace};
+			}
+		}
+	}
+	# Output Header
+	$self->send_xml_header( $xml_out_fh, $xmlns );
+
+	# could take extra options to over-ride current ones, esp in & out
+use Data::Dumper;print STDERR Dumper( $ins );
+	foreach my $in ( @{$ins} )
+	{
+		my $in_fh;
+		my $in_file = $in;
+		my $format = $self->{format};
+		my $prefix = "";
+		if( ref( $in ) eq "HASH" )
+		{
+			$in_file = $in->{file};
+			$format = $in->{format} if( defined $in->{format} );
+			$prefix = $in->{prefix} if( defined $in->{prefix} );
+		}
+
+		if( $in =~ m/^https?:/ )
+		{
+			$in_file = $self->{tmp_dir}."/grinder.in$$.xml";
+			if( ! eval 'use LWP::UserAgent; 1;' ) 
+			{
+				$self->error( "Failed to load Perl Module: LWP::UserAgent" );
+			}	
+			my $ua = LWP::UserAgent->new;
+	
+			my $req = HTTP::Request->new( GET => $in );
+			my $res = $ua->request( $req );
+			if( !$res )
+			{
+				$self->error( "Failed to load URL '".$in_file."': ".$res->status_line );
+			}	
+			my $in_file_out_fh = $self->open_output_file( $in_file ); # shake it all about
+			print { $in_file_out_fh } $res->content;
+			$self->close_file( $in_file_out_fh, $in_file );
+		}
+		$in_fh = $self->open_input_file( $in_file );
+		
+		if( $format eq "excel" ) { $self->process_excel( $in_fh, $xml_out_fh, $prefix ); }
+		elsif( $format eq "csv" ) { $self->process_csv( $in_fh, $xml_out_fh, $prefix ); }
+		elsif( $format eq "tsv" ) { $self->process_tsv( $in_fh, $xml_out_fh, $prefix ); }
+		elsif( $format eq "colon" ) { $self->process_colon( $in_fh, $xml_out_fh, $prefix ); }
+		elsif( $format eq "psv" ) { $self->process_psv( $in_fh, $xml_out_fh, $prefix ); }
+		else { $self->error( "Unknown format '$format'" ); }
+
+		$self->close_file( $in_fh, $in_file );
+		# delete tmp file if input was from a URL
+		if( $in =~ m/^https?:/ )
+		{
+			$self->unlink_file( $in_file );
+		}
+	}
 
 	# Output end of XML file
-	for my $set_id ( keys %{$self->{set}} )
+	for my $set_id ( keys %{$self->{parse}->{set}} )
 	{
-		my $value = $self->{set}->{$set_id};
+		my $value = $self->{parse}->{set}->{$set_id};
 		$value =~ s/&/&amp;/g;
 		$value =~ s/>/&gt;/g;
 		$value =~ s/</&lt;/g;
@@ -411,17 +465,9 @@ sub grind
 		print { $xml_out_fh } "  <set id='$set_id'>$value</set>\n";
 	}
 
-	print { $xml_out_fh } <<END;
-</grinder-data>
-END
-	$self->close_file( $xml_out_fh, $xml_file );
-	$self->close_file( $in_fh, $self->{in} );
+	$self->send_xml_footer( $xml_out_fh );
 
-	# delete tmp file if input was from a URL
-	if( $self->{in} =~ m/^https?:/ )
-	{
-		$self->unlink_file( $in_file );
-	}
+	$self->close_file( $xml_out_fh, $xml_file );
 
 
 	# If no XSLT then we are done
@@ -521,12 +567,6 @@ sub process_row
 			$fields->{$cell} = 1;
 		}
 
-		# Output Header
-		print { $out } <<END;
-<?xml version="1.0" encoding='utf-8'?>
-<grinder-data xmlns="http://purl.org/openorg/grinder/ns/">
-END
-
 		return;
 	}
 
@@ -567,6 +607,25 @@ END
 	
 }
 
+sub send_xml_footer
+{
+	my( $self, $out ) = @_;
+
+	print { $out } <<END;
+</grinder-data>
+END
+}
+
+sub send_xml_header
+{
+	my( $self, $out ) = @_;
+
+	print { $out } <<END;
+<?xml version="1.0" encoding='utf-8'?>
+<grinder-data xmlns="http://purl.org/openorg/grinder/ns/">
+END
+}
+	
 sub process_excel
 {
 	my( $self, $in, $out ) = @_;
