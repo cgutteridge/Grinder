@@ -3,6 +3,7 @@
 
     xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
     xmlns:g="http://purl.org/openorg/grinder/ns/"
+    xmlns:b="http://purl.org/openorg/grinder/ns/buildings/"
     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
     xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
@@ -21,53 +22,53 @@
   <xsl:template match="/g:grinder-data">
     <rdf:RDF>
       <xsl:comment>TOP</xsl:comment>
-      <xsl:apply-templates select="g:row" /> 
+      <xsl:apply-templates select="b:row" /> 
     </rdf:RDF>
   </xsl:template>
 
-  <xsl:template match="g:row">
-    <rdf:Description rdf:about="{$base-building-uri}{g:id}">
+  <xsl:template match="b:row">
+    <rdf:Description rdf:about="{$base-building-uri}{b:id}">
       <xsl:apply-templates />
     </rdf:Description>
   </xsl:template>
 
-  <xsl:template match="g:id">
+  <xsl:template match="b:id">
     <xsl:if test="string(.) != ''">
     <skos:notation rdf:datatype="{$building-number-scheme}"><xsl:value-of select="string(.)" /></skos:notation>
     </xsl:if>
   </xsl:template>
 
-  <xsl:template match="g:name">
+  <xsl:template match="b:name">
     <xsl:if test="string(.) != ''">
     <rdfs:label><xsl:value-of select="string(.)"/></rdfs:label>
     </xsl:if>
   </xsl:template>
 
-  <xsl:template match="g:lat">
+  <xsl:template match="b:lat">
     <xsl:if test="string(.) != ''">
     <geo:lat><xsl:value-of select="string(.)"/></geo:lat>
     </xsl:if>
   </xsl:template>
 
-  <xsl:template match="g:long">
+  <xsl:template match="b:long">
     <xsl:if test="string(.) != ''">
     <geo:long><xsl:value-of select="string(.)"/></geo:long>
     </xsl:if>
   </xsl:template>
 
-  <xsl:template match="g:page">
+  <xsl:template match="b:page">
     <xsl:if test="string(.) != ''">
     <foaf:page rdf:resource="{string(.)}" />
     </xsl:if>
   </xsl:template>
 
-  <xsl:template match="g:depiction">
+  <xsl:template match="b:depiction">
     <xsl:if test="string(.) != ''">
     <foaf:depiction rdf:resource="{string(.)}" />
     </xsl:if>
   </xsl:template>
   
-  <xsl:template match="g:site">
+  <xsl:template match="b:site">
     <xsl:if test="string(.) != ''">
     <spacerel:within rdf:resource="{$base-site-uri}{string(.)}" />
     </xsl:if>
@@ -86,4 +87,6 @@ TODO:
 	building-date:1995
 	architects:
 	awards:
+
+sites, rooms, other?
 -->

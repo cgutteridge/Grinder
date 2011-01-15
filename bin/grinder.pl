@@ -387,7 +387,7 @@ sub grind
 			}
 		}
 	}
-	my $xmlns = { g=>"http://purl.org/openorg/grinder/ns/" };
+	my $xmlns = { ""=>"http://purl.org/openorg/grinder/ns/" };
 	my $ns = 0;
 	foreach my $in ( @{$ins} )
 	{
@@ -396,7 +396,7 @@ sub grind
 			if( defined $in->{namespace} )
 			{
 				$in->{prefix} = "ns".($ns++);
-				$xmlns->{$in->{prefix}} = "http://purl.org/openorg/grinder/ns/".$in->{namespace};
+				$xmlns->{$in->{prefix}} = "http://purl.org/openorg/grinder/ns/".$in->{namespace}."/";
 			}
 		}
 	}
@@ -404,7 +404,7 @@ sub grind
 	$self->send_xml_header( $xml_out_fh, $xmlns );
 
 	# could take extra options to over-ride current ones, esp in & out
-use Data::Dumper;print STDERR Dumper( $ins );
+
 	foreach my $in ( @{$ins} )
 	{
 		my $in_fh;
@@ -514,7 +514,7 @@ use Data::Dumper;print STDERR Dumper( $ins );
 
 sub process_row
 {
-	my( $self, $out, $cells ) = @_;
+	my( $self, $out, $cells, $prefix ) = @_;
 
 	# Skip empty rows
 	my $empty = 1;
@@ -570,7 +570,7 @@ sub process_row
 		return;
 	}
 
-	print { $out } "  <row>\n";
+	print { $out } "  <$prefix:row>\n";
 	for my $i ( 0..(scalar @{$self->{parse}->{fields}} - 1 ) )
 	{
 		my $field = $self->{parse}->{fields}->[$i];
@@ -599,11 +599,11 @@ sub process_row
 			$value =~ s/>/&gt;/g;
 			$value =~ s/</&lt;/g;
 			$value =~ s/"/&quot;/g;
-			print { $out } "	<$field>$value</$field>\n";
+			print { $out } "	<$prefix:$field>$value</$prefix:$field>\n";
 		}
 		$self->{parse}->{rows}++;
 	}
-	print { $out } "  </row>\n";
+	print { $out } "  </$prefix:row>\n";
 	
 }
 
@@ -618,17 +618,24 @@ END
 
 sub send_xml_header
 {
-	my( $self, $out ) = @_;
+	my( $self, $out, $xmlns ) = @_;
 
 	print { $out } <<END;
 <?xml version="1.0" encoding='utf-8'?>
-<grinder-data xmlns="http://purl.org/openorg/grinder/ns/">
+<grinder-data 
 END
+	foreach my $prefix ( keys %{$xmlns} )
+	{
+		my $attr = "xmlns:$prefix";
+		if( $prefix eq "" ) { $attr = "xmlns"; }
+		print { $out } "    $attr=\"".$xmlns->{$prefix}."\"\n";
+	}
+	print { $out } ">\n";
 }
 	
 sub process_excel
 {
-	my( $self, $in, $out ) = @_;
+	my( $self, $in, $out, $prefix ) = @_;
 
 	if( ! eval 'use Spreadsheet::ParseExcel; 1;' ) 
 	{
@@ -663,37 +670,37 @@ sub process_excel
 			if( $cell ) { $v = $cell->value(); };
 			push @cells, $v;
 		}
-		$self->process_row( $out, \@cells );
+		$self->process_row( $out, \@cells, $prefix );
 	}
 }
 
 sub process_psv
 {
-	my( $self, $in, $out ) = @_;
+	my( $self, $in, $out, $prefix ) = @_;
 
 	while( my $line = readline( $in ) )
 	{
 		chomp $line;
 
-		$self->process_row( $out, [ split /\|/, $line ] );
+		$self->process_row( $out, [ split /\|/, $line ], $prefix );
 	}
 }
 
 sub process_colon
 {
-	my( $self, $in, $out ) = @_;
+	my( $self, $in, $out, $prefix ) = @_;
 
 	while( my $line = readline( $in ) )
 	{
 		chomp $line;
 
-		$self->process_row( $out, [ split /:/, $line ] );
+		$self->process_row( $out, [ split /:/, $line ], $prefix );
 	}
 }
 
 sub process_csv
 {
-	my( $self, $in, $out ) = @_;
+	my( $self, $in, $out, $prefix ) = @_;
 
 	if( ! eval 'use Text::CSV; 1;' ) 
 	{
@@ -711,7 +718,7 @@ sub process_csv
 			next;
 		}
 		
-		$self->process_row( $out, [ $csv->fields() ] );
+		$self->process_row( $out, [ $csv->fields() ], $prefix );
 	}
 }
 
