@@ -50,7 +50,7 @@
           <xsl:if test="g:data-homepage/text()">
              <foaf:homepage rdf:resource='{g:data-homepage}' />
           </xsl:if>
-          <rdfs:comment>Contact <xsl:value-of select="g:contact-name" /> <xsl:value-of select="g:contact-email" /></rdfs:comment>
+          <rdfs:comment>Contact <xsl:value-of select="g:contact-name" /><xsl:text> </xsl:text><xsl:value-of select="g:contact-email" /></rdfs:comment>
 
         </dcat:Catalog>
       </oo:open-data-catalog>
