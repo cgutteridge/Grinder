@@ -205,9 +205,9 @@ sub new
 						my( $id, $value ) = split( /=/, $right );
 						$self->{$left}->{$id} = $value;
 					}
-					elsif( $left eq "include" )
+					elsif( $left eq "include" || $left eq "in" )
 					{
-						push @{$self->{include}}, $right;
+						push @{$self->{$left}}, $right;
 					}
 					elsif( !defined $options{$left} )
 					{
@@ -346,6 +346,7 @@ sub message
 {
 	my( $self, $msg, $priority ) = @_;
 
+	$priority = 1 unless defined $priority;
 	if( $priority <= $self->{noise} )
 	{
 		print STDERR "$msg\n";
@@ -387,6 +388,7 @@ sub grind
 			}
 		}
 	}
+
 	my $xmlns = { ""=>"http://purl.org/openorg/grinder/ns/" };
 	my $ns = 0;
 	foreach my $in ( @{$ins} )
@@ -400,6 +402,7 @@ sub grind
 			}
 		}
 	}
+
 	# Output Header
 	$self->send_xml_header( $xml_out_fh, $xmlns );
 
@@ -410,12 +413,14 @@ sub grind
 		my $in_fh;
 		my $in_file = $in;
 		my $format = $self->{format};
+		my $worksheet = $self->{worksheet};
 		my $prefix = "";
 		if( ref( $in ) eq "HASH" )
 		{
 			$in_file = $in->{file};
 			$format = $in->{format} if( defined $in->{format} );
 			$prefix = $in->{prefix} if( defined $in->{prefix} );
+			$worksheet = $in->{worksheet} if( defined $in->{worksheet} );
 		}
 
 		if( $in =~ m/^https?:/ )
@@ -423,7 +428,7 @@ sub grind
 			$in_file = $self->{tmp_dir}."/grinder.in$$.xml";
 			if( ! eval 'use LWP::UserAgent; 1;' ) 
 			{
-				$self->error( "Failed to load Perl Module: LWP::UserAgent" );
+				$self->error( "Failed to load Perl Module: LWP::UserAgent: $@" );
 			}	
 			my $ua = LWP::UserAgent->new;
 	
@@ -439,7 +444,7 @@ sub grind
 		}
 		$in_fh = $self->open_input_file( $in_file );
 		
-		if( $format eq "excel" ) { $self->process_excel( $in_fh, $xml_out_fh, $prefix ); }
+		if( $format eq "excel" ) { $self->process_excel( $in_fh, $xml_out_fh, $prefix, $worksheet ); }
 		elsif( $format eq "csv" ) { $self->process_csv( $in_fh, $xml_out_fh, $prefix ); }
 		elsif( $format eq "tsv" ) { $self->process_tsv( $in_fh, $xml_out_fh, $prefix ); }
 		elsif( $format eq "colon" ) { $self->process_colon( $in_fh, $xml_out_fh, $prefix ); }
@@ -525,11 +530,15 @@ sub process_row
 	return if( $empty );
 
 	# *STAR directive fields
-	if( substr( $cells->[0],0,1 ) eq "*" )
+	if( defined $cells->[0] && substr( $cells->[0],0,1 ) eq "*" )
 	{
 		if( $cells->[0] eq "*SET" )
 		{
 			$self->{parse}->{set}->{$cells->[1]} = $cells->[2];
+		}
+		elsif( $cells->[0] eq "*COMMENT" )
+		{
+			;
 		}
 		else
 		{
@@ -635,27 +644,28 @@ END
 	
 sub process_excel
 {
-	my( $self, $in, $out, $prefix ) = @_;
+	my( $self, $in, $out, $prefix, $worksheet_number ) = @_;
 
-	if( ! eval 'use Spreadsheet::ParseExcel; 1;' ) 
+	if( ! eval 'use Spreadsheet::ParseExcel; use Spreadsheet::ParseExcel::FmtISO; 1;' ) 
 	{
-		$self->error( "Failed to load Perl Module: Spreadsheet::ParseExcel" );
+		$self->error( "Failed to load Perl Module: Spreadsheet::ParseExcel: $@" );
 	}	
 
 	my $parser = Spreadsheet::ParseExcel->new();
+	my $formatter = Spreadsheet::ParseExcel::FmtISO->new();
 	my $workbook = $parser->parse( $in );
 	if ( !defined $workbook ) 
 	{
 		$self->error( "Failed to parse Excel file: ".$parser->error() );
 	}
 
-	my $n = $self->{worksheet} || 1;
+	$worksheet_number = 1 unless defined $worksheet_number;
 	my @worksheets = $workbook->worksheets();
-	if( !defined $worksheets[$n-1] )
+	if( !defined $worksheets[$worksheet_number-1] )
 	{
-		$self->error( "Workbook does not have a worksheet #$n" );
+		$self->error( "Workbook does not have a worksheet #$worksheet_number" );
 	}
-	my $worksheet = $worksheets[$n-1];
+	my $worksheet = $worksheets[$worksheet_number-1];
 
 	my ( $row_min, $row_max ) = $worksheet->row_range();
 	my ( $col_min, $col_max ) = $worksheet->col_range();
@@ -667,7 +677,7 @@ sub process_excel
 		{
 			my $cell = $worksheet->get_cell( $row, $col );
 			my $v;
-			if( $cell ) { $v = $cell->value(); };
+			if( $cell ) { $v =  $cell->value; }
 			push @cells, $v;
 		}
 		$self->process_row( $out, \@cells, $prefix );
@@ -722,4 +732,3 @@ sub process_csv
 	}
 }
 
-1;
