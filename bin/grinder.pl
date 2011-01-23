@@ -390,14 +390,13 @@ sub grind
 	}
 
 	my $xmlns = { ""=>"http://purl.org/openorg/grinder/ns/" };
-	my $ns = 0;
 	foreach my $in ( @{$ins} )
 	{
 		if( ref( $in ) eq "HASH" )
 		{
 			if( defined $in->{namespace} )
 			{
-				$in->{prefix} = "ns".($ns++);
+				$in->{prefix} = $in->{namespace};
 				$xmlns->{$in->{prefix}} = "http://purl.org/openorg/grinder/ns/".$in->{namespace}."/";
 			}
 		}
@@ -443,7 +442,8 @@ sub grind
 			$self->close_file( $in_file_out_fh, $in_file );
 		}
 		$in_fh = $self->open_input_file( $in_file );
-		
+	
+		delete $self->{parse}->{fields};	
 		if( $format eq "excel" ) { $self->process_excel( $in_fh, $xml_out_fh, $prefix, $worksheet ); }
 		elsif( $format eq "csv" ) { $self->process_csv( $in_fh, $xml_out_fh, $prefix ); }
 		elsif( $format eq "tsv" ) { $self->process_tsv( $in_fh, $xml_out_fh, $prefix ); }
@@ -592,9 +592,11 @@ sub process_row
 		$value =~ s/\s+$//;
 
 		my @values;
-		if( $self->{delineator}->{$field} )
+		my $delcode = $field;
+		if( $prefix ne "" ) { $delcode = "$prefix:$field"; }
+		if( $self->{delineator}->{$delcode} )
 		{
-			my $del = $self->{delineator}->{$field};
+			my $del = $self->{delineator}->{$delcode};
 			@values = split( /\s*$del\s*/, $value );
 		}
 		else
@@ -646,13 +648,12 @@ sub process_excel
 {
 	my( $self, $in, $out, $prefix, $worksheet_number ) = @_;
 
-	if( ! eval 'use Spreadsheet::ParseExcel; use Spreadsheet::ParseExcel::FmtISO; 1;' ) 
+	if( ! eval 'use Spreadsheet::ParseExcel; 1;' ) 
 	{
 		$self->error( "Failed to load Perl Module: Spreadsheet::ParseExcel: $@" );
 	}	
 
 	my $parser = Spreadsheet::ParseExcel->new();
-	my $formatter = Spreadsheet::ParseExcel::FmtISO->new();
 	my $workbook = $parser->parse( $in );
 	if ( !defined $workbook ) 
 	{
