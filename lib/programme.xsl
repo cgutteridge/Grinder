@@ -16,6 +16,7 @@
   xmlns:tl='http://purl.org/NET/c4dm/timeline.owl#'
   xmlns:spacerel="http://data.ordnancesurvey.co.uk/ontology/spatialrelations/"
   xmlns:oo="http://purl.org/openorg/"
+  xmlns:ov="http://open.vocab.org/terms/"
 
   xmlns:g="http://purl.org/openorg/grinder/ns/"
   xmlns:timeslots="http://purl.org/openorg/grinder/ns/timeslots/"
@@ -434,11 +435,14 @@
           <xsl:if test="sponsors:logo-url/text()">
             <foaf:logo rdf:resource="{sponsors:logo-url}" />
           </xsl:if>
+          <xsl:if test="sponsors:sponsor-level/text()">
+            <ov:rank><xsl:value-of select='sponsors:sponsor-level' /></ov:rank>
+          </xsl:if>
         </foaf:Organization>
       </prog:sponsor>
     </rdf:Description>
 
-    <!-- TODO: Sponsor Type, Sponsor Level-->
+    <!-- TODO: Sponsor Type -->
 
   </xsl:template>
 
