@@ -590,7 +590,9 @@ sub process_row
 		return;
 	}
 
-	print { $out } "  <$prefix:row>\n";
+	my $p = $prefix.":";
+	if( $prefix eq "" ) { $p = ""; }
+	print { $out } "  <${p}row>\n";
 	for my $i ( 0..(scalar @{$self->{parse}->{fields}} - 1 ) )
 	{
 		my $field = $self->{parse}->{fields}->[$i];
@@ -603,11 +605,9 @@ sub process_row
 		$value =~ s/\s+$//;
 
 		my @values;
-		my $delcode = $field;
-		if( $prefix ne "" ) { $delcode = "$prefix:$field"; }
-		if( $self->{delineator}->{$delcode} )
+		if( $self->{delineator}->{$p.$field} )
 		{
-			my $del = $self->{delineator}->{$delcode};
+			my $del = $self->{delineator}->{$p.$field};
 			@values = split( /\s*$del\s*/, $value );
 		}
 		else
@@ -621,11 +621,11 @@ sub process_row
 			$value =~ s/>/&gt;/g;
 			$value =~ s/</&lt;/g;
 			$value =~ s/"/&quot;/g;
-			print { $out } "	<$prefix:$field>$value</$prefix:$field>\n";
+			print { $out } "	<${p}$field>$value</${p}$field>\n";
 		}
 		$self->{parse}->{rows}++;
 	}
-	print { $out } "  </$prefix:row>\n";
+	print { $out } "  </${p}row>\n";
 	
 }
 
