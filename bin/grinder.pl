@@ -370,6 +370,17 @@ sub grind
 	my $xml_out_fh = $self->open_output_file( $xml_file );
 
 	$self->{parse} = { rows=>0, set=>{} };	
+
+	my @lt = localtime;
+	my @gmt = gmtime;
+
+
+	$lt[5]+=1900; $lt[4]+=1;
+	$gmt[5]+=1900; $gmt[4]+=1;
+	my $offset = ($lt[1]+$lt[2]*60)-($gmt[1]+$gmt[2]*60);
+
+	$self->{parse}->{set}->{_timestamp} = sprintf( '%04d-%02d-%02dT%02d:%02d:%02d%s%02d:%02d', 
+		$lt[5],$lt[4],$lt[3],$lt[2],$lt[1],$lt[0], $offset<0?"":"+", $offset/60, $offset % 60);
 	foreach my $k ( keys %{ $self->{set} } ) { $self->{parse}->{set}->{$k} = $self->{set}->{$k}; }
 
 	my $ins = $self->{in};
