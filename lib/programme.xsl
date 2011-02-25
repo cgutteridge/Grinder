@@ -29,22 +29,22 @@
 
   <xsl:output method="xml" version="1.0" encoding="UTF-8" indent="yes" omit-xml-declaration="no" />
 
-  <xsl:variable name='_timestamp' select='/g:grinder-data/g:set[@id="_timestamp"]' />
+  <xsl:variable name='_timestamp' select='/g:grinder-data/g:set[@name="_timestamp"]' />
 
-  <xsl:variable name='event_name' select='/g:grinder-data/g:set[@id="event_name"]' />
-  <xsl:variable name='event_homepage' select='/g:grinder-data/g:set[@id="event_homepage"]' />
-  <xsl:variable name='event_city_name' select='/g:grinder-data/g:set[@id="event_city_name"]' />
-  <xsl:variable name='event_city_uri' select='/g:grinder-data/g:set[@id="event_city_uri"]' />
-  <xsl:variable name='event_start' select='/g:grinder-data/g:set[@id="event_start"]' />
-  <xsl:variable name='event_end' select='/g:grinder-data/g:set[@id="start_end"]' />
-  <xsl:variable name='event_timezone' select='/g:grinder-data/g:set[@id="event_timezone"]' />
-  <xsl:variable name='event_venue_id' select='/g:grinder-data/g:set[@id="event_venue_id"]' />
-  <xsl:variable name='event_twitter_username' select='/g:grinder-data/g:set[@id="event_twitter_username"]' />
-  <xsl:variable name='event_twitter_hashtag' select='/g:grinder-data/g:set[@id="event_twitter_hashtag"]' />
+  <xsl:variable name='event_name' select='/g:grinder-data/g:set[@name="event_name"]' />
+  <xsl:variable name='event_homepage' select='/g:grinder-data/g:set[@name="event_homepage"]' />
+  <xsl:variable name='event_city_name' select='/g:grinder-data/g:set[@name="event_city_name"]' />
+  <xsl:variable name='event_city_uri' select='/g:grinder-data/g:set[@name="event_city_uri"]' />
+  <xsl:variable name='event_start' select='/g:grinder-data/g:set[@name="event_start"]' />
+  <xsl:variable name='event_end' select='/g:grinder-data/g:set[@name="start_end"]' />
+  <xsl:variable name='event_timezone' select='/g:grinder-data/g:set[@name="event_timezone"]' />
+  <xsl:variable name='event_venue_id' select='/g:grinder-data/g:set[@name="event_venue_id"]' />
+  <xsl:variable name='event_twitter_username' select='/g:grinder-data/g:set[@name="event_twitter_username"]' />
+  <xsl:variable name='event_twitter_hashtag' select='/g:grinder-data/g:set[@name="event_twitter_hashtag"]' />
 
-  <xsl:variable name='programme_license_uri' select='/g:grinder-data/g:set[@id="programme_license_uri"]' />
-  <xsl:variable name='programme_maintainer_id' select='/g:grinder-data/g:set[@id="programme_maintainer_id"]' />
-  <xsl:variable name='programme_rdf_url' select='/g:grinder-data/g:set[@id="programme_rdf_url"]' />
+  <xsl:variable name='programme_license_uri' select='/g:grinder-data/g:set[@name="programme_license_uri"]' />
+  <xsl:variable name='programme_maintainer_id' select='/g:grinder-data/g:set[@name="programme_maintainer_id"]' />
+  <xsl:variable name='programme_rdf_url' select='/g:grinder-data/g:set[@name="programme_rdf_url"]' />
 
   <xsl:variable name='base_uri' select='concat( $programme_rdf_url, "#" )' />
 

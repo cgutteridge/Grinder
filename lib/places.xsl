@@ -19,14 +19,14 @@
 
   <xsl:output method="xml" version="1.0" encoding="UTF-8" indent="yes" omit-xml-declaration="no" />
 
-  <xsl:variable name='base-site-uri' select='/g:grinder-data/g:set[@id="base-site-uri"]' />
-  <xsl:variable name='site-code-scheme' select='/g:grinder-data/g:set[@id="site-code-scheme"]' />
+  <xsl:variable name='base-site-uri' select='/g:grinder-data/g:set[@name="base-site-uri"]' />
+  <xsl:variable name='site-code-scheme' select='/g:grinder-data/g:set[@name="site-code-scheme"]' />
 
-  <xsl:variable name='base-building-uri' select='/g:grinder-data/g:set[@id="base-building-uri"]' />
-  <xsl:variable name='building-code-scheme' select='/g:grinder-data/g:set[@id="building-code-scheme"]' />
+  <xsl:variable name='base-building-uri' select='/g:grinder-data/g:set[@name="base-building-uri"]' />
+  <xsl:variable name='building-code-scheme' select='/g:grinder-data/g:set[@name="building-code-scheme"]' />
 
-  <xsl:variable name='base-room-uri' select='/g:grinder-data/g:set[@id="base-room-uri"]' />
-  <xsl:variable name='room-code-scheme' select='/g:grinder-data/g:set[@id="room-code-scheme"]' />
+  <xsl:variable name='base-room-uri' select='/g:grinder-data/g:set[@name="base-room-uri"]' />
+  <xsl:variable name='room-code-scheme' select='/g:grinder-data/g:set[@name="room-code-scheme"]' />
 
   <xsl:template match="/g:grinder-data">
     <rdf:RDF>
