@@ -1,0 +1,234 @@
+#!/usr/bin/perl 
+
+use strict;
+use warnings;
+use Getopt::Long;
+use Data::Dumper;
+
+Getopt::Long::Configure("permute");
+my $show_help;
+my $show_version;
+my $verbose;
+my $quiet;
+my $create;
+GetOptions( 
+	'help|?' => \$show_help,
+	'version' => \$show_version,
+
+	'verbose+' => \$verbose,
+	'quiet' => \$quiet,
+
+	'create' => \$create,
+);
+
+my $cfg_base_dir = "/home/sotondata/data.southampton.ac.uk/cfg";
+my $config_file = "$cfg_base_dir/publish_dataset_config.pl";
+my $LODP = do $config_file;
+bless $LODP, "LODPublish";
+
+$LODP->{noise} = 1;
+$LODP->{noise} = 0 if( $quiet );
+$LODP->{noise} = 1+$verbose if( $verbose );
+
+my $start_datetime = iso_datetime();
+my $date = iso_date();
+
+my $bin_dir = "/home/sotondata/data.southampton.ac.uk/bin";
+
+my $bin = {};
+
+my $base_dir = "/home/sotondata/data.southampton.ac.uk";
+my $source_base_dir = "$base_dir/incoming-data";
+my $target_base_dir = "$base_dir/htdocs/dumps";
+my $target_base_url = "http://data.southampton.ac.uk/dumps";
+my $tmp_dir = "/tmp";
+my $xml_base = "http://id.southampton.ac.uk";
+
+my $bp_url = "http://data.southampton.ac.uk/gizmos/boilerplate.php";
+
+$bin->{rapper} = "/usr/bin/rapper";
+$bin->{grinder} = "/home/sotondata/data.southampton.ac.uk/Grinder/bin/grinder";
+$bin->{cp} = "/bin/cp";
+$bin->{curl} = "/usr/bin/curl";
+
+foreach my $key ( keys %{$bin} ) { $ENV{"\U$key"} = $bin->{$key}; }
+
+my( $dataset, $subset ) = @ARGV;
+if( !defined $dataset )
+{
+	die "dataset not set";
+}
+
+# TODO: handle sub datasets betterer
+my $cfg_dir = "$cfg_base_dir/$dataset";
+if( !-d $cfg_dir ) { die "$cfg_dir directory does not exist." ; }
+
+# TODO: read config options
+
+my $path = "$dataset";
+if( !-d "$target_base_dir/$path" ) { mkdir "$target_base_dir/$path"; }
+if( $dataset eq "courses" || $dataset eq "payments" ) # should be in config file 
+{
+	if( !defined $subset ) 
+	{
+		die "\u$dataset dataset needs to be $dataset/<subset-id>";
+	}
+	$path .= "/$subset";
+	if( !-d "$target_base_dir/$path" ) { mkdir "$target_base_dir/$path"; }
+}
+my $subset_id = $path;
+my $source_dir = "$source_base_dir/$subset_id";
+
+my $target_path = "$path/$date";
+#if( $dataset eq "profile" ) { $target_path = $path; }
+
+if( $create )
+{
+	my $cmd = "curl -s http://data.southampton.ac.uk/gizmos/ckan-json.php?dataset=http://id.southampton.ac.uk/dataset/$dataset | sed 's/&/\%26/g' | sed 's/=/\%3D/g' | curl ".$LODP->{ckan}->{api_url}."/rest/package -s --data-binary \@- -H 'Authorization: ".$LODP->{ckan}->{key}."'";
+	$LODP->exec_cmd( "Create CKAN package", $cmd );
+}
+
+
+my $convert_script = "$cfg_dir/to_rdfxml";
+if( !-e $convert_script ) { die "$convert_script convert script does not exist." ; }
+
+my $target_dir = "$target_base_dir/$target_path";
+my $target_dir_new = "$tmp_dir/$dataset.new.$$"; # not in htdocs, may have secrets
+if( -d $target_dir_new ) { $LODP->exec_cmd( "", "rm -rf $target_dir_new" ); }
+mkdir( $target_dir_new ) || die "Can't create $target_dir_new: $!";
+$LODP->exec_cmd( "",  "cp -a $cfg_dir/* $target_dir_new" );
+if( -d $source_dir )
+{
+	$LODP->exec_cmd( "",  "cp -a $source_dir/* $target_dir_new" );
+}
+
+# make basic RDF+XML from raw data
+$ENV{RDFXML_OUTPUT} = "$tmp_dir/data.rdf.$$";
+chdir( $target_dir_new );
+print $LODP->exec_cmd( "Create", "./to_rdfxml" );
+
+my $final_dump_file_ttl = "$dataset.ttl";
+my $final_dump_url_ttl = "$target_base_url/$target_path/$final_dump_file_ttl";
+my $final_dump_file_rdf = "$dataset.rdf";
+my $final_dump_url_rdf = "$target_base_url/$target_path/$final_dump_file_rdf";
+
+my $prov_file = "$tmp_dir/data.prov.ttl.$$";
+open( PROV, ">:utf8", "$prov_file" ) || die "Couldn't write provenance triples to '$prov_file' $!";
+print PROV '
+@prefix rdfs: 	<http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: 	<http://www.w3.org/2001/XMLSchema#> .
+@prefix rdf: 	<http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix voidp: 	<http://purl.org/void/provenance/ns/> .
+@prefix to: 	<http://www.w3.org/2006/time#> .
+@prefix soton:	<http://id.southampton.ac.uk/ns/> .
+<'.$final_dump_url_ttl.'#provenance> rdf:type voidp:ProvenanceEvent ;
+     voidp:resultingDataset <'.$final_dump_url_ttl.'>  ;
+     voidp:processType soton:ConvertAndPublishDataset ;';
+my $dh;
+opendir( $dh, "$target_dir_new" ) || die "Can't read dir";
+while( my $file = readdir( $dh ) )
+{
+	next if( $file =~ m/^\./ );
+	if( $file =~ m/\.(tsv|csv|xls)$/ ) # TODO could be much better	
+	{
+		print PROV '
+     voidp:sourceDataset <'.$target_base_url.'/'.$target_path.'/'.$file.'> ;';
+	}
+	else
+	{
+		print PROV ' 
+     soton:processIncludedFile <'.$target_base_url.'/'.$target_path.'/'.$file.'> ;';
+	}
+}
+closedir( $dh );
+print PROV '
+     to:hasBeginning "'.$start_datetime.'"^^xsd:dateTime ;
+     to:hasEnd "'.iso_datetime().'"^^xsd:dateTime .
+
+<'.$final_dump_url_rdf.'#provenance> rdf:type voidp:ProvenanceEvent ;
+     voidp:sourceDataset <'.$final_dump_url_ttl.'> ;
+     voidp:resultingDataset <'.$final_dump_url_rdf.'>  ;
+     voidp:processType soton:ConvertTurtleToRDFXML .
+';
+
+
+close PROV;
+# TODO add sourceDataset and agent
+
+$ENV{RDFXML_OUTPUT} = "$tmp_dir/data.rdf.$$";
+# add boilerplate and publish as RDF
+my $cmd = "( ".$bin->{rapper}." -q -i turtle -I $final_dump_url_ttl $prov_file -o ntriples - ; ".$bin->{curl}." -s '$bp_url?dataset=$subset_id&date=$date' | ".$bin->{rapper}." -q -i rdfxml -I $final_dump_url_ttl -o ntriples - ; ".$bin->{rapper}." -q -i rdfxml -I $final_dump_url_ttl ".$ENV{RDFXML_OUTPUT}." -o ntriples) | sort -u | ".$bin->{rapper}." -q -i ntriples -o turtle -I $xml_base - > $final_dump_file_ttl";
+$LODP->exec_cmd( "Publish Turtle", $cmd );
+unlink( $prov_file ) || die "Can't unlink temp file '$prov_file' $!";
+
+$cmd = $bin->{rapper}." -q -i turtle $final_dump_file_ttl -o rdfxml -O $final_dump_url_rdf > $final_dump_file_rdf";
+$LODP->exec_cmd( "Publish RDFXML", $cmd );
+
+# that all seemed to work, install new dataset into live location
+unlink( $ENV{RDFXML_OUTPUT} ) || die "Can't unlink temp file: ".$ENV{RDFXML_OUTPUT}.": $!";
+if( -e $target_dir ) { $LODP->exec_cmd( "", "rm -rf $target_dir" ); }
+$LODP->exec_cmd( "Make Live", "mv $target_dir_new $target_dir" );
+
+# TODO clean these up
+
+# Post publishing hooks:
+
+# cue sparql import TODO a bit hacky
+my $sparql_import_url = "http://sparql.data.southampton.ac.uk/admin/import/";
+$cmd = "curl -s $sparql_import_url --data 'store=soton_store&urls=http://id.southampton.ac.uk/dataset/$subset_id/latest'";
+$LODP->exec_cmd( "queue sparql import", $cmd );
+
+# update ckan 	
+$cmd = "curl -s http://data.southampton.ac.uk/gizmos/ckan-json.php?dataset=http://id.southampton.ac.uk/dataset/$dataset | sed 's/&/\%26/g' | sed 's/=/\%3D/g' | curl ".$LODP->{ckan}->{api_url}."/rest/package/southampton-ac-uk-$dataset -s --data-binary \@- -H 'Authorization: ".$LODP->{ckan}->{key}."'";
+$LODP->exec_cmd( "update CKAN", $cmd );
+
+exit;
+
+sub iso_date
+{
+	my(@lt) = localtime;
+	return sprintf( "%04d-%02d-%02d", $lt[5]+1900, $lt[4]+1, $lt[3] );
+}
+sub iso_datetime
+{
+	my(@lt) = gmtime;
+	return sprintf( "%04d-%02d-%02dT%02d:%02d:%02dZ", $lt[5]+1900, $lt[4]+1, $lt[3], $lt[2],$lt[1],$lt[0] );
+}
+
+package LODPublish;
+
+sub exec_cmd
+{
+	my( $LODP, $msg, $cmd ) = @_;
+
+	if( $msg ne "" ) { print "$msg\n"; }
+	print "% $cmd\n" if( $LODP->{noise} > 1 );
+	print `$cmd`;
+	if ($? == -1) 
+	{
+		print STDERR "failed to execute: $!\n";
+	}
+	elsif ($? & 127) 
+	{
+		printf STDERR "child died with signal %d, %s coredump\n",
+				($? & 127),  ($? & 128) ? 'with' : 'without';
+	}
+	elsif( $? >> 8 != 0 )
+	{
+		printf STDERR "child exited with value %d\n", $? >> 8;
+		exit 1;
+	}
+
+}
+
+
+
+
+__DATA__
+	elsif( $dataset eq "beckers-building-photos" )
+	{
+		$rawrdffile = "$rawrdf/$dataset/$dataset.$date.ttl";
+		$rawrdf_format = "turtle";
+		my $cmd = "$bin/beckers-images-to-triples.pl > $rawrdffile";
+		$LODP->exec_cmd( $cmd );
+	}
