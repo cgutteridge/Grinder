@@ -14,7 +14,7 @@ use Getopt::Long;
 
 my %options = ( 
 	config=>[], 	set=>[], 	delineator=>[], 
-	include=>[],    process=>[],	
+	include=>[],    process=>[],	carry=>[],
 	noise=>1, 	in=>[], 	out=>undef, 
 	xslt=>undef, 	format=>undef,	worksheet=>undef, 
 	"skip-rows"=>undef,"skip-cols"=>undef,
@@ -45,6 +45,7 @@ GetOptions(
 	'include=s' => $options{"include"},
 	'set=s' => $options{"set"},
 	'delineator=s' => $options{"delineator"},
+	'carry=s' => $options{"carry"},
 	'process=s' => $options{"process"},
 ) || show_usage();
 #use Data::Dumper;print Dumper( \%options );exit;
@@ -123,9 +124,13 @@ Usage: $0 [OPTION]... [--config filename]
  --delineator <x>=<y>   Set a character <y> to use to split data in cells 
                          in a column with heading <x>.
 
- --process <x>=<y>,<z>... Add attributes to the XML cell with heading <x>.
-                           attributes include "tag" and "md5" and "sha1" and
-                           "mbox_sha1sum"
+ --carry <x>            Set a column which should have the value carried 
+                         over to following rows if it is empty in those
+                         rows.
+
+ --process <x>=<y>,...  Add attributes to the XML cell with heading <x>.
+                         attributes include "tag" and "md5" and "sha1" and
+                         "mbox_sha1sum"
                                
  --include <filename>   Include the XML from <filename> at the top of the XML
                          output from the XSLT. Has no affect if xslt is not
@@ -159,6 +164,7 @@ use warnings;
 
 # set = {} or [] or $
 # delineator = {} or [] or $
+# carry = {} or [] or $
 # process = {} or [] or $
 # include = [] or $
 
@@ -179,6 +185,7 @@ sub new
 	my $self = bless { 
 		set => {}, 
 		delineator => {},
+		carry => {},
 		process => {},
 		include => [],
 	}, $class;
@@ -186,7 +193,7 @@ sub new
 	# normal options
 	foreach my $opt_key ( keys %options )
 	{
-		next if( $opt_key eq "set" || $opt_key eq "delineator" || $opt_key eq "process" );
+		next if( $opt_key =~ m/^(set|delineator|process|carry)$/ );
 		if( $opt_key eq "include" ) 
 		{
 			if( ref( $options{$opt_key} ) eq "" ) 
@@ -218,9 +225,10 @@ sub new
 				{
 					my( $left, $right ) = ( $1, $2 );
 					$right=~s/\s*$//;
-					if( $left eq "set" || $left eq "delineator" || $left eq "process" )
+					if( $left =~ m/^(set|delineator|process|carry)$/ )
 					{
 						my( $id, $value ) = split( /=/, $right );
+						$value = 1 if !defined $value;
 						$self->{$left}->{$id} = $value;
 					}
 					elsif( $left eq "include" || $left eq "in" )
@@ -248,7 +256,7 @@ sub new
 	foreach my $opt_key ( keys %options )
 	{
 		my $v = $options{$opt_key};
-		if( $opt_key eq "set" || $opt_key eq "delineator" || $opt_key eq "process" )
+		if( $opt_key =~ m/^(set|delineator|process|carry)$/ )
 		{
 			$v = [ $v ] if( ref( $v ) eq "" );	
 			if( ref( $v ) eq "ARRAY" )
@@ -256,6 +264,7 @@ sub new
 				foreach my $touple ( @{$v} )
 				{
 					my( $id, $value ) = split( /=/, $touple );
+					$value = 1 if !defined $value;
 					$self->{$opt_key}->{$id} = $value;
 				}
 			}
@@ -390,7 +399,6 @@ sub grind
 
 	my @lt = localtime;
 	my @gmt = gmtime;
-
 
 	$lt[5]+=1900; $lt[4]+=1;
 	$gmt[5]+=1900; $gmt[4]+=1;
@@ -626,12 +634,19 @@ sub process_row
 	my $p = $prefix.":";
 	if( $prefix eq "" ) { $p = ""; }
 	print { $out } "  <${p}row>\n";
+	my $this_row = {};
 	for my $i ( 0..(scalar @{$self->{parse}->{fields}} - 1 ) )
 	{
 		my $field = $self->{parse}->{fields}->[$i];
 		next if !defined $field;
 	
 		my $value = $cells->[$i];
+		if( $self->{carry}->{$p.$field} && (!defined $value || $value =~ m/^\s*$/) )
+		{
+			$value = $self->{parse}->{prev_row}->{$p.$field};
+		}
+		$this_row->{$p.$field} = $value;
+
 		next if !defined $value;
 
 		$value =~ s/^\s+//;
@@ -694,7 +709,8 @@ sub process_row
 		$self->{parse}->{rows}++;
 	}
 	print { $out } "  </${p}row>\n";
-	
+
+	$self->{parse}->{prev_row} = $this_row;	
 }
 
 sub send_xml_footer
