@@ -461,6 +461,7 @@ sub grind
 			$self->{parse}->{"skip-rows"} = $in->{"skip-rows"} if( defined $in->{"skip-rows"} );
 			$self->{parse}->{"skip-cols"} = $in->{"skip-cols"} if( defined $in->{"skip-cols"} );
 		}
+		$self->{parse}->{"filename"} = $in_file;
 
 		if( $in =~ m/^https?:/ )
 		{
@@ -619,10 +620,15 @@ sub process_row
 				push @{$self->{parse}->{fields}}, undef;
 				next;
 			}
+			$cell =~ s/^[^A-Z0-9]*//i;
+			$cell =~ s/--+/-/g;
+			if( $cell eq "" ) { $cell = "empty-heading";  }
+			if( $cell =~ m/^\d/ ) { $cell = "n".$cell; }
 			if( defined $fields->{$cell} )
 			{
-				$self->message( "Duplicate column heading '$cell'", 1 );
-				next;
+				my $n = 2;
+				while( defined $fields->{"$cell-$n"} ) { $n++; }
+				$cell = "$cell-$n";
 			}
 			push @{$self->{parse}->{fields}}, $cell;
 			$fields->{$cell} = 1;
@@ -633,12 +639,17 @@ sub process_row
 
 	my $p = $prefix.":";
 	if( $prefix eq "" ) { $p = ""; }
-	print { $out } "  <${p}row>\n";
+	my $filename = $self->{parse}->{filename};
+	$filename =~ s/&/&amp;/g;
+	$filename =~ s/>/&gt;/g;
+	$filename =~ s/</&lt;/g;
+	$filename =~ s/"/&quot;/g;
+	print { $out } "  <${p}row filename='$filename'>\n";
 	my $this_row = {};
 	for my $i ( 0..(scalar @{$self->{parse}->{fields}} - 1 ) )
 	{
 		my $field = $self->{parse}->{fields}->[$i];
-		next if !defined $field;
+		if( !defined $field ) { $field = "COL-".($i+1); }
 	
 		my $value = $cells->[$i];
 		if( $self->{carry}->{$p.$field} && (!defined $value || $value =~ m/^\s*$/) )
