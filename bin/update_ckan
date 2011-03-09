@@ -1,0 +1,109 @@
+#!/usr/bin/perl 
+
+use strict;
+use warnings;
+use Getopt::Long;
+use Data::Dumper;
+
+Getopt::Long::Configure("permute");
+my $show_help;
+my $show_version;
+my $verbose;
+my $quiet;
+my $create;
+GetOptions( 
+	'help|?' => \$show_help,
+	'version' => \$show_version,
+
+	'verbose+' => \$verbose,
+	'quiet' => \$quiet,
+
+	'create' => \$create,
+);
+
+
+# Read publish tool config
+my $cfg_base_dir = "/var/wwwsites/cfg";
+my $config_file = "$cfg_base_dir/publish_dataset_config.pl";
+my $LODP = do $config_file;
+bless $LODP, "LODPublish";
+
+$LODP->{noise} = 1;
+$LODP->{noise} = 0 if( $quiet );
+$LODP->{noise} = 1+$verbose if( $verbose );
+
+my $start_datetime = iso_datetime();
+my $date = iso_date();
+
+my $bin = {};
+
+my $source_base_dir = "/var/wwwsites/incoming-data";
+
+$bin->{curl} = "/usr/bin/curl";
+
+my( $dataset, $subset ) = @ARGV;
+if( !defined $dataset )
+{
+	die "dataset not set";
+}
+
+# TODO: handle sub datasets betterer
+my $cfg_dir = "$cfg_base_dir/$dataset";
+if( !-d $cfg_dir ) { die "$cfg_dir directory does not exist." ; }
+
+
+
+
+# update ckan 	
+
+if( $create )
+{
+	my $cmd = "curl -s http://data.southampton.ac.uk/gizmos/ckan-json.php?dataset=http://id.southampton.ac.uk/dataset/$dataset | sed 's/&/\%26/g' | sed 's/=/\%3D/g' | curl ".$LODP->{ckan}->{api_url}."/rest/package -s --data-binary \@- -H 'Authorization: ".$LODP->{ckan}->{key}."'";
+	$LODP->exec_cmd( "Create CKAN package", $cmd );
+}
+else
+{
+	my $cmd = "curl -s http://data.southampton.ac.uk/gizmos/ckan-json.php?dataset=http://id.southampton.ac.uk/dataset/$dataset | sed 's/&/\%26/g' | sed 's/=/\%3D/g' | curl ".$LODP->{ckan}->{api_url}."/rest/package/southampton-ac-uk-$dataset -s --data-binary \@- -H 'Authorization: ".$LODP->{ckan}->{key}."'";
+$LODP->exec_cmd( "Update CKAN", $cmd );
+}
+
+exit;
+
+sub iso_date
+{
+	my(@lt) = localtime;
+	return sprintf( "%04d-%02d-%02d", $lt[5]+1900, $lt[4]+1, $lt[3] );
+}
+sub iso_datetime
+{
+	my(@lt) = gmtime;
+	return sprintf( "%04d-%02d-%02dT%02d:%02d:%02dZ", $lt[5]+1900, $lt[4]+1, $lt[3], $lt[2],$lt[1],$lt[0] );
+}
+
+package LODPublish;
+
+sub exec_cmd
+{
+	my( $LODP, $msg, $cmd ) = @_;
+
+	if( $msg ne "" ) { print "$msg\n"; }
+	print "% $cmd\n" if( $LODP->{noise} > 1 );
+	print `$cmd`;
+	if ($? == -1) 
+	{
+		print STDERR "failed to execute: $!\n";
+	}
+	elsif ($? & 127) 
+	{
+		printf STDERR "child died with signal %d, %s coredump\n",
+				($? & 127),  ($? & 128) ? 'with' : 'without';
+	}
+	elsif( $? >> 8 != 0 )
+	{
+		printf STDERR "child exited with value %d\n", $? >> 8;
+		exit 1;
+	}
+
+}
+
+

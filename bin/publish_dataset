@@ -184,9 +184,7 @@ $LODP->exec_cmd( "Make Live", "mv $target_dir_new $target_dir" );
 {
 	my $cmd;
 	
-	# cue sparql import TODO a bit hacky
-	my $sparql_import_url = "http://sparql.data.southampton.ac.uk/admin/import/";
-	$cmd = "curl -s $sparql_import_url --data 'store=soton_store&urls=http://id.southampton.ac.uk/dataset/$subset_id/latest'";
+	$cmd = "sparql_import $subset_id";
 	$LODP->exec_cmd( "queue sparql import", $cmd );
 	
 	# update ckan 	

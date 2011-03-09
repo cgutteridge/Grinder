@@ -129,8 +129,8 @@ Usage: $0 [OPTION]... [--config filename]
                          rows.
 
  --process <x>=<y>,...  Add attributes to the XML cell with heading <x>.
-                         attributes include "tag" and "md5" and "sha1" and
-                         "mbox_sha1sum"
+                         attributes include "tag" and "md5" and "sha1",
+                         "mbox_sha1sum", "ftag"
                                
  --include <filename>   Include the XML from <filename> at the top of the XML
                          output from the XSLT. Has no affect if xslt is not
@@ -681,6 +681,15 @@ sub process_row
 			{
 				TYPE: foreach my $type ( split /,/, $self->{process}->{$p.$field} )
 				{
+					if( $type eq "ftag" ) # needssortting CJG TODO
+					{
+						my $tagname = $field;
+$tagname=~s/-/ /g;
+						$tagname =~ s/\b([a-z])/\u$1/g;
+						$tagname =~ s/[^a-zA-Z0-9-_]//g;
+						$attrs.=" ftag='$tagname'";	
+						next;
+					}
 					if( $value eq "" ) { next TYPE; }
 					if( $type eq "md5" )
 					{
@@ -699,7 +708,6 @@ sub process_row
 					}
 					elsif( $type eq "tag" )
 					{
-						use Digest::SHA1;
 						my $tagname = $value;
 						$tagname =~ s/\b([a-z])/\u$1/g;
 						$tagname =~ s/[^a-zA-Z0-9-_]//g;
