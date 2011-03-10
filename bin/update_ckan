@@ -53,17 +53,17 @@ if( !-d $cfg_dir ) { die "$cfg_dir directory does not exist." ; }
 
 
 
-
+my $ckan_json = "http://data.southampton.ac.uk/dataset/$dataset.ckan.json";
 # update ckan 	
 
 if( $create )
 {
-	my $cmd = "curl -s http://data.southampton.ac.uk/gizmos/ckan-json.php?dataset=http://id.southampton.ac.uk/dataset/$dataset | sed 's/&/\%26/g' | sed 's/=/\%3D/g' | curl ".$LODP->{ckan}->{api_url}."/rest/package -s --data-binary \@- -H 'Authorization: ".$LODP->{ckan}->{key}."'";
+	my $cmd = "curl -s $ckan_json | sed 's/&/\%26/g' | sed 's/=/\%3D/g' | curl ".$LODP->{ckan}->{api_url}."/rest/package -s --data-binary \@- -H 'Authorization: ".$LODP->{ckan}->{key}."'";
 	$LODP->exec_cmd( "Create CKAN package", $cmd );
 }
 else
 {
-	my $cmd = "curl -s http://data.southampton.ac.uk/gizmos/ckan-json.php?dataset=http://id.southampton.ac.uk/dataset/$dataset | sed 's/&/\%26/g' | sed 's/=/\%3D/g' | curl ".$LODP->{ckan}->{api_url}."/rest/package/southampton-ac-uk-$dataset -s --data-binary \@- -H 'Authorization: ".$LODP->{ckan}->{key}."'";
+	my $cmd = "curl -s $ckan_json | sed 's/&/\%26/g' | sed 's/=/\%3D/g' | curl ".$LODP->{ckan}->{api_url}."/rest/package/southampton-ac-uk-$dataset -s --data-binary \@- -H 'Authorization: ".$LODP->{ckan}->{key}."'";
 $LODP->exec_cmd( "Update CKAN", $cmd );
 }
 

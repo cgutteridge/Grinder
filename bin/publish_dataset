@@ -81,16 +81,10 @@ my $source_dir = "$source_base_dir/$subset_id";
 my $target_path = "$path/$date";
 #if( $dataset eq "profile" ) { $target_path = $path; }
 
-if( $create )
-{
-	my $cmd = "curl -s http://data.southampton.ac.uk/gizmos/ckan-json.php?dataset=http://id.southampton.ac.uk/dataset/$dataset | sed 's/&/\%26/g' | sed 's/=/\%3D/g' | curl ".$LODP->{ckan}->{api_url}."/rest/package -s --data-binary \@- -H 'Authorization: ".$LODP->{ckan}->{key}."'";
-	$LODP->exec_cmd( "Create CKAN package", $cmd );
-}
-
-
-
 my $target_dir = "$target_base_dir/$target_path";
 my $target_dir_new = "$tmp_dir/$dataset.new.$$"; # not in htdocs, may have secrets
+
+# Prepare Working directory 
 if( -d $target_dir_new ) { $LODP->exec_cmd( "", "rm -rf $target_dir_new" ); }
 mkdir( $target_dir_new ) || die "Can't create $target_dir_new: $!";
 $LODP->exec_cmd( "",  "cp -a $cfg_dir/* $target_dir_new" );
@@ -98,8 +92,9 @@ if( -d $source_dir )
 {
 	$LODP->exec_cmd( "",  "cp -a $source_dir/* $target_dir_new" );
 }
-chdir( $target_dir_new );
 
+
+chdir( $target_dir_new );
 if( -e "./prepare" )
 {
 	print $LODP->exec_cmd( "Prepare", "./prepare" );
@@ -172,13 +167,15 @@ else
 {
 	die "valid convert script does not exist." ; 
 }
+## //Publishing Script now complete
 
+## Purge any .private files
+$LODP->exec_cmd( "Purge any *.private files", "rm -rf $target_dir_new/*.private" );
 
 
 if( -e $target_dir ) { $LODP->exec_cmd( "", "rm -rf $target_dir" ); }
 $LODP->exec_cmd( "Make Live", "mv $target_dir_new $target_dir" );
 
-# TODO clean these up
 
 # Post publishing hooks:
 {
@@ -188,7 +185,7 @@ $LODP->exec_cmd( "Make Live", "mv $target_dir_new $target_dir" );
 	$LODP->exec_cmd( "queue sparql import", $cmd );
 	
 	# update ckan 	
-	$cmd = "curl -s http://data.southampton.ac.uk/gizmos/ckan-json.php?dataset=http://id.southampton.ac.uk/dataset/$dataset | sed 's/&/\%26/g' | sed 's/=/\%3D/g' | curl ".$LODP->{ckan}->{api_url}."/rest/package/southampton-ac-uk-$dataset -s --data-binary \@- -H 'Authorization: ".$LODP->{ckan}->{key}."'";
+	$cmd = "update_ckan $subset_id";
 	$LODP->exec_cmd( "update CKAN", $cmd );
 }
 
