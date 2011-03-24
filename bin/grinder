@@ -130,7 +130,9 @@ Usage: $0 [OPTION]... [--config filename]
 
  --process <x>=<y>,...  Add attributes to the XML cell with heading <x>.
                          attributes include "tag" and "md5" and "sha1",
-                         "mbox_sha1sum", "ftag"
+                         "mbox_sha1sum", "ftag", "fname". You can use a *
+                         in the <x> section to match zero or more characters.
+                          
                                
  --include <filename>   Include the XML from <filename> at the top of the XML
                          output from the XSLT. Has no affect if xslt is not
@@ -485,6 +487,7 @@ sub grind
 		$in_fh = $self->open_input_file( $in_file );
 	
 		delete $self->{parse}->{fields};	
+		delete $self->{parse}->{fields_names};	
 		if( $format eq "excel" ) { $self->process_excel( $in_fh, $xml_out_fh, $prefix, $worksheet ); }
 		elsif( $format eq "csv" ) { $self->process_csv( $in_fh, $xml_out_fh, $prefix ); }
 		elsif( $format eq "tsv" ) { $self->process_tsv( $in_fh, $xml_out_fh, $prefix ); }
@@ -612,6 +615,8 @@ sub process_row
 			}
 			$cell =~ s/^\s+//;
 			$cell =~ s/\s+$//;
+			my $name = $cell;
+
 			$cell =~ s/\s/-/g;
 			$cell =~ s/[^-_a-zA-Z0-9]//g;
 			$cell = lc $cell;
@@ -631,6 +636,7 @@ sub process_row
 				$cell = "$cell-$n";
 			}
 			push @{$self->{parse}->{fields}}, $cell;
+			$self->{parse}->{field_names}->{$cell} = $name;
 			$fields->{$cell} = 1;
 		}
 
@@ -677,14 +683,22 @@ sub process_row
 		VALUE: foreach my $value ( @values )
 		{
 			my $attrs = "";
-			if( defined $self->{process}->{$p.$field} )
+			EXP: foreach my $key ( keys %{$self->{process}} )
 			{
-				TYPE: foreach my $type ( split /,/, $self->{process}->{$p.$field} )
+				my $exp = $key;
+				$exp =~ s/\*/\.*/g;
+				if( "$p$field" !~ m/^$exp$/ ) { next EXP; }
+				TYPE: foreach my $type ( split /,/, $self->{process}->{$key} )
 				{
-					if( $type eq "ftag" ) # needssortting CJG TODO
+					if( $type eq "fname" )
 					{
-						my $tagname = $field;
-$tagname=~s/-/ /g;
+						my $tagname = $self->{parse}->{field_names}->{$field};
+						$attrs.=" fname='$tagname'";	
+						next;
+					}
+					if( $type eq "ftag" )
+					{
+						my $tagname = $self->{parse}->{field_names}->{$field};
 						$tagname =~ s/\b([a-z])/\u$1/g;
 						$tagname =~ s/[^a-zA-Z0-9-_]//g;
 						$attrs.=" ftag='$tagname'";	
