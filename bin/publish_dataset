@@ -43,7 +43,6 @@ my $target_base_url = "http://data.southampton.ac.uk/dumps";
 my $tmp_dir = "/tmp";
 my $xml_base = "http://id.southampton.ac.uk";
 
-my $bp_url = "http://data.southampton.ac.uk/gizmos/boilerplate.php";
 
 $bin->{rapper} = "/usr/local/bin/rapper";
 $bin->{grinder} = "/var/wwwsites/Grinder/bin/grinder";
@@ -150,6 +149,8 @@ elsif( -e "./to_rdfxml" )
 ';
 	close PROV;
 	# TODO add sourceDataset and agent
+
+	my $bp_url = "http://data.southampton.ac.uk/dataset/$subset_id.boilerplate.rdf";
 
 	$ENV{RDFXML_OUTPUT} = "$tmp_dir/data.rdf.$$";
 	# add boilerplate and publish as RDF
