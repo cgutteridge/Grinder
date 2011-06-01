@@ -22,7 +22,7 @@ GetOptions(
 );
 
 
-# Read publish tool config
+# Read publish tool config to get API key
 my $cfg_base_dir = "/var/wwwsites/cfg";
 my $config_file = "$cfg_base_dir/publish_dataset_config.pl";
 my $LODP = do $config_file;
@@ -64,7 +64,7 @@ if( $create )
 else
 {
 	my $cmd = "curl -s $ckan_json | sed 's/&/\%26/g' | sed 's/=/\%3D/g' | curl ".$LODP->{ckan}->{api_url}."/rest/package/southampton-ac-uk-$dataset -s --data-binary \@- -H 'Authorization: ".$LODP->{ckan}->{key}."'";
-$LODP->exec_cmd( "Update CKAN", $cmd );
+	$LODP->exec_cmd( "Update CKAN", $cmd );
 }
 
 exit;
