@@ -857,18 +857,18 @@ sub process_csv
 		$self->error( "Failed to load Perl Module: Text::CSV" );
 	}	
 
-	my $csv = Text::CSV->new();
+        my $csv = Text::CSV->new ({ binary => 1});
 
-	while( my $line = readline( $in ) )
+        while (my $row = $csv->getline( $in )) 
 	{
-		if( !$csv->parse($line) ) 
+		if( !$row )
 		{
 			my $err = $csv->error_input;
 			$self->message( "Failed to parse line: $err", 1 );
 			next;
 		}
 		
-		$self->process_row( $out, [ $csv->fields() ], $prefix );
+		$self->process_row( $out, $row, $prefix );
 	}
 }
 
