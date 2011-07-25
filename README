@@ -1,4 +1,4 @@
-Grinder:
+Grinder: 
 
 etc/ bin/grinder.pl and lib/ are LGPL.
 perl-lib/ is the liceses of the packages we've added.
