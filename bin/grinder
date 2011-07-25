@@ -231,6 +231,7 @@ sub new
 					{
 						my( $id, $value ) = split( /=/, $right );
 						$value = 1 if !defined $value;
+						$value =~ s/<space>/ /g; #ugh!
 						$self->{$left}->{$id} = $value;
 					}
 					elsif( $left eq "include" || $left eq "in" )
