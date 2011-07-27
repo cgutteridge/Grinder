@@ -215,7 +215,7 @@ sub new
 	{
 		foreach my $config_file ( @{$options{config}} )
 		{
-			my $config_fh = $self->open_input_file( $config_file );
+			my $config_fh = $self->open_input_file( $config_file, "UTF-8" );
 			my $line_no = 0;
 			while( my $line = readline( $config_fh ) )
 			{
@@ -294,18 +294,18 @@ sub new
 
 sub open_input_file
 {
-	my( $self, $filename ) = @_;
+	my( $self, $filename, $charset ) = @_;
 
 	my $fh;
 
 	if( $filename eq "-" )
 	{
 		$fh = *STDIN;
-		binmode( $fh, ":utf8" );
+		binmode( $fh, ":encoding($charset)" );
 	}
 	else
 	{
-		open( $fh, "<:utf8", $filename ) || $self->error( "Failed to open '$filename' for reading: $!" );
+		open( $fh, "<:encoding($charset)", $filename ) || $self->error( "Failed to open '$filename' for reading: $!" );
 	}
 	$self->message( "Opened '$filename' for reading.", 2 );
 
@@ -451,6 +451,7 @@ sub grind
 		my $in_fh;
 		my $in_file = $in;
 		my $format = $self->{format};
+		my $charset = "UTF-8";
 		my $worksheet = $self->{worksheet};
 		$self->{parse}->{"skip-rows"} = $self->{"skip-rows"};
 		$self->{parse}->{"skip-cols"} = $self->{"skip-cols"};
@@ -460,6 +461,7 @@ sub grind
 			$in_file = $in->{file};
 			$format = $in->{format} if( defined $in->{format} );
 			$prefix = $in->{prefix} if( defined $in->{prefix} );
+			$charset = $in->{charset} if( defined $in->{charset} );
 			$worksheet = $in->{worksheet} if( defined $in->{worksheet} );
 			$self->{parse}->{"skip-rows"} = $in->{"skip-rows"} if( defined $in->{"skip-rows"} );
 			$self->{parse}->{"skip-cols"} = $in->{"skip-cols"} if( defined $in->{"skip-cols"} );
@@ -485,7 +487,7 @@ sub grind
 			print { $in_file_out_fh } $res->content;
 			$self->close_file( $in_file_out_fh, $in_file );
 		}
-		$in_fh = $self->open_input_file( $in_file );
+		$in_fh = $self->open_input_file( $in_file, $charset );
 	
 		delete $self->{parse}->{fields};	
 		delete $self->{parse}->{fields_names};	
@@ -531,7 +533,7 @@ sub grind
 	my @lines = ();
 	foreach my $inc_file ( @{$self->{include}} )
 	{
-		my $inc_fh = $self->open_input_file( $inc_file );
+		my $inc_fh = $self->open_input_file( $inc_file, "UTF-8" );
 		while( my $line = readline( $inc_fh ) ) { push @lines, $line; }
 		$self->close_file( $inc_fh, $inc_file );
 	}
