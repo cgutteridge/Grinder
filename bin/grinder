@@ -14,9 +14,10 @@ use Getopt::Long;
 
 my %options = ( 
 	config=>[], 	set=>[], 	delineator=>[], 
-	include=>[],
+	include=>[],    process=>[],	carry=>[],
 	noise=>1, 	in=>[], 	out=>undef, 
 	xslt=>undef, 	format=>undef,	worksheet=>undef, 
+	"skip-rows"=>undef,"skip-cols"=>undef,
 );
 
 Getopt::Long::Configure("permute");
@@ -37,11 +38,15 @@ GetOptions(
 	'xslt=s' => \$options{"xslt"},
 	'format=s' => \$options{"format"},
 	'worksheet=i' => \$options{"worksheet"},
+	'skip-rows=i' => \$options{"skip-rows"},
+	'skip-cols=i' => \$options{"skip-cols"},
 
 	'config=s' => $options{"config"},
 	'include=s' => $options{"include"},
 	'set=s' => $options{"set"},
 	'delineator=s' => $options{"delineator"},
+	'carry=s' => $options{"carry"},
+	'process=s' => $options{"process"},
 ) || show_usage();
 #use Data::Dumper;print Dumper( \%options );exit;
 
@@ -85,51 +90,67 @@ sub show_help
 Usage: $0 [OPTION]... [--in filename] [--out filename] [--xslt filename]
 Usage: $0 [OPTION]... [--config filename] 
 
- --config <filename>	Load options from a config file, although command
-						 line options override.
+ --config <filename>    Load options from a config file, although command
+                         line options override.
 
- --in <filename|url>	File to load spreadsheet from. Default "-" (stdin),
-						 or if it starts with http: or https: then it is 
-						 treaded as a URL.
+ --in <filename|url>    File to load spreadsheet from. Default "-" (stdin),
+                         or if it starts with http: or https: then it is 
+                         treaded as a URL.
 
- --format <format>	  Format of spreadsheet.
-						 csv (default) - Comma separated values
-						 tsv - Tab separated values
-						 psv - Pipe character separated values (eg. biztalk)
-						 excel - Excel document (.xsl NOT .xslx)
-						 colon - Colon-separated (eg. passwd)
+ --format <format>      Format of spreadsheet.
+                         csv (default) - Comma separated values
+                         tsv - Tab separated values
+                         psv - Pipe character separated values (eg. biztalk)
+                         excel - Excel document (.xsl NOT .xslx)
+                         colon - Colon-separated (eg. passwd)
+
  --worksheet <number>   For multi sheet files, which sheet (default 1)
 
- --out <filename>	   File to output result to. Default "-" (stdout)
+ --skip-rows <number>   Ignore the this number of rows before looking for the
+                         headings.
 
- --xslt <filename>	  If specified, run the XML generated throught this 
-						 XSLT transform and output that.
+ --skip-cols <number>   Ignore this number of columns on every line.
 
- --set <x>=<y>		  Set a variable in the intermediate stage XML, sets 
-						 <set id='x'>y</set>. This overrides values set in
-						 config file(s) but is overridden by values set 
-						 using *SET in the input data.
+ --out <filename>       File to output result to. Default "-" (stdout)
+
+ --xslt <filename>      If specified, run the XML generated throught this 
+                         XSLT transform and output that.
+
+ --set <x>=<y>          Set a variable in the intermediate stage XML, sets 
+                         <set name='x'>y</set>. This overrides values set in
+                         config file(s) but is overridden by values set 
+                         using *SET in the input data.
 
  --delineator <x>=<y>   Set a character <y> to use to split data in cells 
-						 in a column with heading <x>.
-							   
+                         in a column with heading <x>.
+
+ --carry <x>            Set a column which should have the value carried 
+                         over to following rows if it is empty in those
+                         rows.
+
+ --process <x>=<y>,...  Add attributes to the XML cell with heading <x>.
+                         attributes include "tag" and "md5" and "sha1",
+                         "mbox_sha1sum", "ftag", "fname". You can use a *
+                         in the <x> section to match zero or more characters.
+                          
+                               
  --include <filename>   Include the XML from <filename> at the top of the XML
-						 output from the XSLT. Has no affect if xslt is not
-						 set. Also assumes that the XSLT will add a 
-						 <!--TOP--> to the XML it produces that can be used 
-						 as the hook to insert the <filename> data.
+                         output from the XSLT. Has no affect if xslt is not
+                         set. Also assumes that the XSLT will add a 
+                         <!--TOP--> to the XML it produces that can be used 
+                         as the hook to insert the <filename> data.
 
- --verbose			  Include more debug information. May be repeated for 
-						 even more information.
+ --verbose              Include more debug information. May be repeated for 
+                         even more information.
 
- --quiet				Supress even normal warnings (but not errors).
+ --quiet                Supress even normal warnings (but not errors).
 
- --help				 Show this help and exit.
+ --help                 Show this help and exit.
 
- --version			  Show the Grinder version and exit.
+ --version              Show the Grinder version and exit.
 
 END
-	exit;
+    exit;
 }
 
 
@@ -145,6 +166,8 @@ use warnings;
 
 # set = {} or [] or $
 # delineator = {} or [] or $
+# carry = {} or [] or $
+# process = {} or [] or $
 # include = [] or $
 
 # in (default -)
@@ -152,6 +175,8 @@ use warnings;
 # xslt
 # format (default csv)
 # worksheet (default 1), excel format only
+# skip-rows 
+# skip-cols 
 # config = [] or $
 # noise (default 1)
 
@@ -162,13 +187,15 @@ sub new
 	my $self = bless { 
 		set => {}, 
 		delineator => {},
+		carry => {},
+		process => {},
 		include => [],
 	}, $class;
 
 	# normal options
 	foreach my $opt_key ( keys %options )
 	{
-		next if( $opt_key eq "set" || $opt_key eq "delineator" );
+		next if( $opt_key =~ m/^(set|delineator|process|carry)$/ );
 		if( $opt_key eq "include" ) 
 		{
 			if( ref( $options{$opt_key} ) eq "" ) 
@@ -188,7 +215,7 @@ sub new
 	{
 		foreach my $config_file ( @{$options{config}} )
 		{
-			my $config_fh = $self->open_input_file( $config_file );
+			my $config_fh = $self->open_input_file( $config_file, "UTF-8" );
 			my $line_no = 0;
 			while( my $line = readline( $config_fh ) )
 			{
@@ -200,9 +227,11 @@ sub new
 				{
 					my( $left, $right ) = ( $1, $2 );
 					$right=~s/\s*$//;
-					if( $left eq "set" || $left eq "delineator" )
+					if( $left =~ m/^(set|delineator|process|carry)$/ )
 					{
 						my( $id, $value ) = split( /=/, $right );
+						$value = 1 if !defined $value;
+						$value =~ s/<space>/ /g; #ugh!
 						$self->{$left}->{$id} = $value;
 					}
 					elsif( $left eq "include" || $left eq "in" )
@@ -226,11 +255,11 @@ sub new
 		}
 	}
 
-	#  passed-in options overrides config for hash type fields
+	#  passed-in options overrides config for process type fields
 	foreach my $opt_key ( keys %options )
 	{
 		my $v = $options{$opt_key};
-		if( $opt_key eq "set" || $opt_key eq "delineator" )
+		if( $opt_key =~ m/^(set|delineator|process|carry)$/ )
 		{
 			$v = [ $v ] if( ref( $v ) eq "" );	
 			if( ref( $v ) eq "ARRAY" )
@@ -238,6 +267,7 @@ sub new
 				foreach my $touple ( @{$v} )
 				{
 					my( $id, $value ) = split( /=/, $touple );
+					$value = 1 if !defined $value;
 					$self->{$opt_key}->{$id} = $value;
 				}
 			}
@@ -250,7 +280,6 @@ sub new
 			}
 			next;
 		}
-
 	}
 
 	$self->{format} = "csv" unless defined $self->{format};
@@ -265,18 +294,18 @@ sub new
 
 sub open_input_file
 {
-	my( $self, $filename ) = @_;
+	my( $self, $filename, $charset ) = @_;
 
 	my $fh;
 
 	if( $filename eq "-" )
 	{
 		$fh = *STDIN;
-		binmode( $fh, ":utf8" );
+		binmode( $fh, ":encoding($charset)" );
 	}
 	else
 	{
-		open( $fh, "<:utf8", $filename ) || $self->error( "Failed to open '$filename' for reading: $!" );
+		open( $fh, "<:encoding($charset)", $filename ) || $self->error( "Failed to open '$filename' for reading: $!" );
 	}
 	$self->message( "Opened '$filename' for reading.", 2 );
 
@@ -374,7 +403,6 @@ sub grind
 	my @lt = localtime;
 	my @gmt = gmtime;
 
-
 	$lt[5]+=1900; $lt[4]+=1;
 	$gmt[5]+=1900; $gmt[4]+=1;
 	my $offset = ($lt[1]+$lt[2]*60)-($gmt[1]+$gmt[2]*60);
@@ -388,9 +416,9 @@ sub grind
 
 	foreach my $in ( @{$ins} )
 	{
-		if( $in =~ m/;/ )
+		if( $in =~ m/[; ]/ )
 		{
-			my @parts = split( /;/, $in );
+			my @parts = split( /[ ;]/, $in );
 			$in = { file=>shift @parts };
 			foreach my $part ( @parts )
 			{
@@ -423,15 +451,22 @@ sub grind
 		my $in_fh;
 		my $in_file = $in;
 		my $format = $self->{format};
+		my $charset = "UTF-8";
 		my $worksheet = $self->{worksheet};
+		$self->{parse}->{"skip-rows"} = $self->{"skip-rows"};
+		$self->{parse}->{"skip-cols"} = $self->{"skip-cols"};
 		my $prefix = "";
 		if( ref( $in ) eq "HASH" )
 		{
 			$in_file = $in->{file};
 			$format = $in->{format} if( defined $in->{format} );
 			$prefix = $in->{prefix} if( defined $in->{prefix} );
+			$charset = $in->{charset} if( defined $in->{charset} );
 			$worksheet = $in->{worksheet} if( defined $in->{worksheet} );
+			$self->{parse}->{"skip-rows"} = $in->{"skip-rows"} if( defined $in->{"skip-rows"} );
+			$self->{parse}->{"skip-cols"} = $in->{"skip-cols"} if( defined $in->{"skip-cols"} );
 		}
+		$self->{parse}->{"filename"} = $in_file;
 
 		if( $in =~ m/^https?:/ )
 		{
@@ -452,9 +487,10 @@ sub grind
 			print { $in_file_out_fh } $res->content;
 			$self->close_file( $in_file_out_fh, $in_file );
 		}
-		$in_fh = $self->open_input_file( $in_file );
+		$in_fh = $self->open_input_file( $in_file, $charset );
 	
 		delete $self->{parse}->{fields};	
+		delete $self->{parse}->{fields_names};	
 		if( $format eq "excel" ) { $self->process_excel( $in_fh, $xml_out_fh, $prefix, $worksheet ); }
 		elsif( $format eq "csv" ) { $self->process_csv( $in_fh, $xml_out_fh, $prefix ); }
 		elsif( $format eq "tsv" ) { $self->process_tsv( $in_fh, $xml_out_fh, $prefix ); }
@@ -478,7 +514,7 @@ sub grind
 		$value =~ s/>/&gt;/g;
 		$value =~ s/</&lt;/g;
 		$value =~ s/"/&quot;/g;
-		print { $xml_out_fh } "  <set id='$set_id'>$value</set>\n";
+		print { $xml_out_fh } "  <set name='$set_id'>$value</set>\n";
 	}
 
 	$self->send_xml_footer( $xml_out_fh );
@@ -497,7 +533,7 @@ sub grind
 	my @lines = ();
 	foreach my $inc_file ( @{$self->{include}} )
 	{
-		my $inc_fh = $self->open_input_file( $inc_file );
+		my $inc_fh = $self->open_input_file( $inc_file, "UTF-8" );
 		while( my $line = readline( $inc_fh ) ) { push @lines, $line; }
 		$self->close_file( $inc_fh, $inc_file );
 	}
@@ -531,6 +567,17 @@ sub grind
 sub process_row
 {
 	my( $self, $out, $cells, $prefix ) = @_;
+
+	if( defined $self->{parse}->{"skip-rows"} && $self->{parse}->{"skip-rows"} > 0 )
+	{
+		$self->{parse}->{"skip-rows"}--;
+		return;
+	}
+
+	if( defined $self->{parse}->{"skip-cols"} && $self->{parse}->{"skip-cols"} )
+	{
+		for( 1..$self->{parse}->{"skip-cols"} ) { shift @{$cells}; }
+	}
 
 	# Skip empty rows
 	my $empty = 1;
@@ -571,19 +618,28 @@ sub process_row
 			}
 			$cell =~ s/^\s+//;
 			$cell =~ s/\s+$//;
+			my $name = $cell;
+
+			$cell =~ s/\s/-/g;
+			$cell =~ s/[^-_a-zA-Z0-9]//g;
 			$cell = lc $cell;
 			if( $cell eq "" )
 			{
 				push @{$self->{parse}->{fields}}, undef;
 				next;
 			}
+			$cell =~ s/^[^A-Z0-9]*//i;
+			$cell =~ s/--+/-/g;
+			if( $cell eq "" ) { $cell = "empty-heading";  }
+			if( $cell =~ m/^\d/ ) { $cell = "n".$cell; }
 			if( defined $fields->{$cell} )
 			{
-				$self->message( "Duplicate column heading '$cell'", 1 );
-				next;
+				my $n = 2;
+				while( defined $fields->{"$cell-$n"} ) { $n++; }
+				$cell = "$cell-$n";
 			}
-			$cell =~ s/\s/-/g;
 			push @{$self->{parse}->{fields}}, $cell;
+			$self->{parse}->{field_names}->{$cell} = $name;
 			$fields->{$cell} = 1;
 		}
 
@@ -592,13 +648,25 @@ sub process_row
 
 	my $p = $prefix.":";
 	if( $prefix eq "" ) { $p = ""; }
-	print { $out } "  <${p}row>\n";
+	my $filename = $self->{parse}->{filename};
+	$filename =~ s/&/&amp;/g;
+	$filename =~ s/>/&gt;/g;
+	$filename =~ s/</&lt;/g;
+	$filename =~ s/"/&quot;/g;
+	print { $out } "  <${p}row filename='$filename'>\n";
+	my $this_row = {};
 	for my $i ( 0..(scalar @{$self->{parse}->{fields}} - 1 ) )
 	{
 		my $field = $self->{parse}->{fields}->[$i];
-		next if !defined $field;
+		if( !defined $field ) { $field = "COL-".($i+1); }
 	
 		my $value = $cells->[$i];
+		if( $self->{carry}->{$p.$field} && (!defined $value || $value =~ m/^\s*$/) )
+		{
+			$value = $self->{parse}->{prev_row}->{$p.$field};
+		}
+		$this_row->{$p.$field} = $value;
+
 		next if !defined $value;
 
 		$value =~ s/^\s+//;
@@ -615,18 +683,70 @@ sub process_row
 			@values = ( $value );
 		}
 
-		foreach my $value ( @values )
+		VALUE: foreach my $value ( @values )
 		{
+			my $attrs = "";
+			EXP: foreach my $key ( keys %{$self->{process}} )
+			{
+				my $exp = $key;
+				$exp =~ s/\*/\.*/g;
+				if( "$p$field" !~ m/^$exp$/ ) { next EXP; }
+				TYPE: foreach my $type ( split /,/, $self->{process}->{$key} )
+				{
+					if( $type eq "fname" )
+					{
+						my $tagname = $self->{parse}->{field_names}->{$field};
+						$attrs.=" fname='$tagname'";	
+						next;
+					}
+					if( $type eq "ftag" )
+					{
+						my $tagname = $self->{parse}->{field_names}->{$field};
+						$tagname =~ s/\b([a-z])/\u$1/g;
+						$tagname =~ s/[^a-zA-Z0-9-_]//g;
+						$attrs.=" ftag='$tagname'";	
+						next;
+					}
+					if( $value eq "" ) { next TYPE; }
+					if( $type eq "md5" )
+					{
+						use Digest::MD5 qw(md5 md5_hex md5_base64);;
+						$attrs.=" md5='".md5_hex($value)."'";
+					}
+					elsif( $type eq "sha1" )
+					{
+						use Digest::SHA1 qw(sha1_hex);
+						$attrs.=" sha1='".sha1_hex($value)."'";
+					}
+					elsif( $type eq "mbox_sha1sum" )
+					{
+						use Digest::SHA1 qw(sha1_hex);
+						$attrs.=" mbox_sha1sum='".sha1_hex("mailto:$value")."'";
+					}
+					elsif( $type eq "tag" )
+					{
+						my $tagname = $value;
+						$tagname =~ s/\b([a-z])/\u$1/g;
+						$tagname =~ s/[^a-zA-Z0-9-_]//g;
+						$attrs.=" tag='$tagname'";
+					}
+					else
+					{
+						die "Unknown process type: '$type'";
+					}
+				}
+			}
 			$value =~ s/&/&amp;/g;
 			$value =~ s/>/&gt;/g;
 			$value =~ s/</&lt;/g;
 			$value =~ s/"/&quot;/g;
-			print { $out } "	<${p}$field>$value</${p}$field>\n";
+			print { $out } "	<${p}$field$attrs>$value</${p}$field>\n";
 		}
 		$self->{parse}->{rows}++;
 	}
 	print { $out } "  </${p}row>\n";
-	
+
+	$self->{parse}->{prev_row} = $this_row;	
 }
 
 sub send_xml_footer
@@ -663,7 +783,6 @@ sub process_excel
 	{
 		$self->error( "Failed to load Perl Module: Spreadsheet::ParseExcel: $@" );
 	}	
-
 	my $parser = Spreadsheet::ParseExcel->new();
 	my $workbook = $parser->parse( $in );
 	if ( !defined $workbook ) 
@@ -693,6 +812,18 @@ sub process_excel
 			push @cells, $v;
 		}
 		$self->process_row( $out, \@cells, $prefix );
+	}
+}
+
+sub process_tsv
+{
+	my( $self, $in, $out, $prefix ) = @_;
+
+	while( my $line = readline( $in ) )
+	{
+		chomp $line;
+
+		$self->process_row( $out, [ split /\t/, $line ], $prefix );
 	}
 }
 
@@ -729,18 +860,18 @@ sub process_csv
 		$self->error( "Failed to load Perl Module: Text::CSV" );
 	}	
 
-	my $csv = Text::CSV->new();
+        my $csv = Text::CSV->new ({ binary => 1});
 
-	while( my $line = readline( $in ) )
+        while (my $row = $csv->getline( $in )) 
 	{
-		if( !$csv->parse($line) ) 
+		if( !$row )
 		{
 			my $err = $csv->error_input;
 			$self->message( "Failed to parse line: $err", 1 );
 			next;
 		}
 		
-		$self->process_row( $out, [ $csv->fields() ], $prefix );
+		$self->process_row( $out, $row, $prefix );
 	}
 }
 

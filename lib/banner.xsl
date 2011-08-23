@@ -18,10 +18,10 @@
 
   <xsl:output method="xml" version="1.0" encoding="UTF-8" indent="yes" omit-xml-declaration="no" />
 
-  <xsl:variable name='base-module-uri' select='/g:grinder-data/g:set[@id="base-module-uri"]' />
-  <xsl:variable name='base-course-uri' select='/g:grinder-data/g:set[@id="base-course-uri"]' />
-  <xsl:variable name='license-uri' select='/g:grinder-data/g:set[@id="license-uri"]' />
-  <xsl:variable name='_timestamp' select='/g:grinder-data/g:set[@id="_timestamp"]' />
+  <xsl:variable name='base-module-uri' select='/g:grinder-data/g:set[@name="base-module-uri"]' />
+  <xsl:variable name='base-course-uri' select='/g:grinder-data/g:set[@name="base-course-uri"]' />
+  <xsl:variable name='license-uri' select='/g:grinder-data/g:set[@name="license-uri"]' />
+  <xsl:variable name='_timestamp' select='/g:grinder-data/g:set[@name="_timestamp"]' />
 
   <xsl:template match="/g:grinder-data">
     <rdf:RDF>

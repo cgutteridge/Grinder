@@ -13,11 +13,11 @@
 
   <xsl:output method="xml" version="1.0" encoding="UTF-8" indent="yes" omit-xml-declaration="no" />
 
-  <xsl:variable name='base-building-uri' select='/g:grinder-data/g:set[@id="base-building-uri"]' />
-  <xsl:variable name='base-room-uri' select='/g:grinder-data/g:set[@id="base-room-uri"]' />
+  <xsl:variable name='base-building-uri' select='/g:grinder-data/g:set[@name="base-building-uri"]' />
+  <xsl:variable name='base-room-uri' select='/g:grinder-data/g:set[@name="base-room-uri"]' />
 
-  <xsl:variable name='base-seating-uri' select='/g:grinder-data/g:set[@id="base-seating-uri"]' />
-  <xsl:variable name='base-feature-uri' select='/g:grinder-data/g:set[@id="base-features-uri"]' />
+  <xsl:variable name='base-seating-uri' select='/g:grinder-data/g:set[@name="base-seating-uri"]' />
+  <xsl:variable name='base-feature-uri' select='/g:grinder-data/g:set[@name="base-features-uri"]' />
 
   <xsl:template match="/g:grinder-data">
     <rdf:RDF>

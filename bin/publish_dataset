@@ -1,0 +1,413 @@
+#!/usr/bin/perl 
+
+#TODO clean up after
+
+use strict;
+use warnings;
+use Getopt::Long;
+use Data::Dumper;
+use Digest::MD5 qw(md5_hex);
+
+Getopt::Long::Configure("permute");
+my $show_help;
+my $show_version;
+my $force;
+my $verbose;
+my $quiet;
+my $create;
+GetOptions( 
+	'help|?' => \$show_help,
+	'version' => \$show_version,
+
+	'force' => \$force,
+
+	'verbose+' => \$verbose,
+	'quiet' => \$quiet,
+
+	'create' => \$create,
+);
+
+
+# Read publish tool config
+my $cfg_base_dir = "/var/wwwsites/cfg";
+my $config_file = "$cfg_base_dir/publish_dataset_config.pl";
+my $LODP = do $config_file;
+bless $LODP, "LODPublish";
+
+$LODP->{noise} = 1;
+$LODP->{noise} = 0 if( $quiet );
+$LODP->{noise} = 1+$verbose if( $verbose );
+
+my $start_datetime = iso_datetime();
+my $date = iso_date();
+
+my $bin = {};
+
+my $hashes_dir = "/var/wwwsites/var/data-hashes";
+my $source_base_dir = "/var/wwwsites/data";
+my $target_base_dir = "/var/wwwsites/southampton.ac.uk/data/htdocs/dumps";
+my $target_base_url = "http://data.southampton.ac.uk/dumps";
+my $tmp_dir = "/var/wwwsites/var/hopper";
+my $xml_base = "http://id.southampton.ac.uk";
+
+
+$bin->{rapper} = "/usr/local/bin/rapper";
+$bin->{grinder} = "/var/wwwsites/Grinder/bin/grinder";
+$bin->{cp} = "/bin/cp";
+$bin->{curl} = "/usr/bin/curl";
+
+foreach my $key ( keys %{$bin} ) { $ENV{"\U$key"} = $bin->{$key}; }
+
+my( $dataset, $subset ) = @ARGV;
+if( !defined $dataset )
+{
+	die "dataset not set";
+}
+
+# TODO: handle sub datasets betterer
+my $cfg_dir = "$cfg_base_dir/$dataset";
+if( !-d $cfg_dir ) { die "$cfg_dir directory does not exist." ; }
+
+# TODO: read config options
+
+my $path = "$dataset";
+my $id = "$dataset";
+if( !-d "$target_base_dir/$path" ) { mkdir "$target_base_dir/$path"; }
+if( $dataset eq "programmes" || $dataset eq "payments" ) # should be in config file 
+{
+	if( !defined $subset ) 
+	{
+		die "\u$dataset dataset needs to be $dataset/<subset-id>";
+	}
+	$path .= "/$subset";
+	$id .= ".$subset";
+	if( !-d "$target_base_dir/$path" ) { mkdir "$target_base_dir/$path"; }
+}
+my $subset_id = $path;
+my $source_dir = "$source_base_dir/$subset_id";
+
+my $target_path = "$path/$date";
+#if( $dataset eq "profile" ) { $target_path = $path; }
+
+my $target_dir = "$target_base_dir/$target_path";
+my $target_dir_new = "$tmp_dir/$dataset.new.$$"; # not in htdocs, may have secrets
+
+# Prepare Working directory  (hopper)
+if( -d $target_dir_new ) { $LODP->exec_cmd( "", "rm -rf $target_dir_new" ); }
+mkdir( $target_dir_new ) || die "Can't create $target_dir_new: $!";
+# Copy contents of config directory into hopper
+$LODP->exec_cmd( "",  "cp -a $cfg_dir/* $target_dir_new" );
+
+# Copy contents of static data directory into hopper
+if( -d $source_dir )
+{
+	$LODP->exec_cmd( "",  "cp -a $source_dir/* $target_dir_new" );
+}
+
+chdir( $target_dir_new );
+
+# Download/copy any simple URLs and iles into hopper
+my $download_cfg = "./download.cfg";
+if( -e $download_cfg )
+{
+	open( DOWNLOAD, "<:utf8", $download_cfg ) || die "Couldn't read  '$download_cfg' $!";
+	while( my $rawline = <DOWNLOAD> )
+	{
+		my $line = $rawline;
+		chomp $line;
+		$line =~ s/\s*$//g;
+		$line =~ s/^\s*//g;
+		next if( $line =~ m/^#/ );
+		
+		my( $filename, $url ) = split / /, $line;
+		if( !defined $url ) 
+		{
+			print STDERR "Bad line in $download_cfg:\n$rawline";
+			next;
+		}
+		
+		if( $url =~ m/^[a-z]+:/ ) 
+		{
+			print $LODP->exec_cmd( "Download $url to $filename", "curl -Ss '$url' > '$filename'" );
+		}
+		else
+		{
+			print $LODP->exec_cmd( "Copy $url to $filename", "cp '$url' '$filename'" );	
+		}
+	}
+	# TODO log download triples
+	close DOWNLOAD;
+}
+		
+# Download/copy additional data into hopper (via a script)
+if( -e "./update_data" )
+{
+	print $LODP->exec_cmd( "Update Data", "./update_data" );
+}
+
+# Calculate hashes
+my $dh;
+unless( opendir( $dh, "." ) )
+{
+	print STDERR "Can't read dir.\n";
+	exit 1;
+}
+my @files = ();
+while( my $file = readdir( $dh ) )
+{
+	next if $file eq ".";
+	next if $file eq "..";
+	if ( -d $file ) { print STDERR "Skipping directory '$file'\n"; next }
+	push @files, $file;
+}
+my $hashes = {};
+foreach my $file ( sort @files )
+{
+	my $ctx = Digest::MD5->new;
+	open( HASH, $file ) || die "could not read '$file': $!";
+        $ctx->addfile(*HASH);
+	$hashes->{$file} = $ctx->hexdigest;
+
+}
+
+# Load previous hashes
+my $hashes_file = "$hashes_dir/$id.hashes";
+my $old_hashes = {};
+if( -e $hashes_file )
+{
+	open( HASHES, "<:utf8", $hashes_file ) || die "Couldn't read  '$hashes_file' $!";
+	while( my $line = <HASHES> )
+	{
+		chomp $line;
+		$line =~ s/\s*$//g;
+		$line =~ s/^\s*//g;
+		my( $hash, $filename ) = split / /, $line;
+		$old_hashes->{$filename} = $hash;
+	}
+	close HASHES;
+}	
+
+my $changed = 0;
+foreach my $file ( keys %{$hashes} )
+{
+	if( !defined $old_hashes->{$file} )
+	{
+		print STDERR "New file: $file\n";
+		$changed = 1;
+		next;
+	}
+	if( $hashes->{$file} ne $old_hashes->{$file} )
+	{
+		print STDERR "Changed file: $file\n";
+		$changed = 1;
+		next;
+	}
+
+	delete $old_hashes->{$file};
+}
+my @missing = keys %{$old_hashes};
+if( !$changed && scalar @missing )
+{
+	foreach my $file ( @missing )
+	{
+		print STDERR "Removed file: $file\n";
+	}
+	$changed = 1;
+}
+
+if( !$changed )
+{
+	print STDERR "No Changes to files.\n";
+	if( !$force )
+	{
+		exit 0;
+	}	
+	print STDERR "Continuing due to --force\n";
+}
+
+	
+
+if( -e "./prepare" )
+{
+	print $LODP->exec_cmd( "Prepare", "./prepare" );
+}
+elsif( -e "./to_rdfxml" or -e "./to_triples" )
+{
+	my %tmp_files = ();
+
+	my $final_dump_file_ttl = "$dataset.ttl";
+	my $final_dump_url_ttl = "$target_base_url/$target_path/$final_dump_file_ttl";
+	my $final_dump_file_rdf = "$dataset.rdf";
+	my $final_dump_url_rdf = "$target_base_url/$target_path/$final_dump_file_rdf";
+
+	# make basic RDF+XML from raw data
+	my $rdf_file;
+	$ENV{RDF_BASE} = $final_dump_url_ttl;
+	if( -e "./to_triples" )
+	{
+		$rdf_file = "$tmp_dir/data.nt.$$";
+		$tmp_files{$rdf_file} = 1;
+		print $LODP->exec_cmd( "Create Triples", "./to_triples > $rdf_file" );
+	}
+	else
+	{
+		$rdf_file = "$tmp_dir/data.rdf.$$";
+		$ENV{RDFXML_OUTPUT} = $rdf_file;
+		$tmp_files{$rdf_file} = 1;
+		print $LODP->exec_cmd( "Create Triples as RDF/XML", "./to_rdfxml" );
+	}
+
+	my $prov_file = "$tmp_dir/data.prov.ttl.$$";
+	$tmp_files{$prov_file} = 1;
+	open( PROV, ">:utf8", "$prov_file" ) || die "Couldn't write provenance triples to '$prov_file' $!";
+	print PROV '
+@prefix rdfs: 	<http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: 	<http://www.w3.org/2001/XMLSchema#> .
+@prefix rdf: 	<http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix voidp: 	<http://purl.org/void/provenance/ns/> .
+@prefix to: 	<http://www.w3.org/2006/time#> .
+@prefix soton:	<http://id.southampton.ac.uk/ns/> .
+<'.$final_dump_url_ttl.'#provenance> rdf:type voidp:ProvenanceEvent ;
+     voidp:resultingDataset <'.$final_dump_url_ttl.'>  ;
+     voidp:processType soton:ConvertAndPublishDataset ;';
+	my $dh;
+	opendir( $dh, "$target_dir_new" ) || die "Can't read dir";
+	while( my $file = readdir( $dh ) )
+	{
+		next if( $file =~ m/^\./ );
+		if( $file =~ m/\.(tsv|csv|xls)$/ ) # TODO could be much better	
+		{
+			print PROV '
+     voidp:sourceDataset <'.$target_base_url.'/'.$target_path.'/'.$file.'> ;';
+		}
+		else
+		{
+			print PROV ' 
+     soton:processIncludedFile <'.$target_base_url.'/'.$target_path.'/'.$file.'> ;';
+		}
+	}
+	closedir( $dh );
+	print PROV '
+     to:hasBeginning "'.$start_datetime.'"^^xsd:dateTime ;
+     to:hasEnd "'.iso_datetime().'"^^xsd:dateTime .
+
+<'.$final_dump_url_rdf.'#provenance> rdf:type voidp:ProvenanceEvent ;
+     voidp:sourceDataset <'.$final_dump_url_ttl.'> ;
+     voidp:resultingDataset <'.$final_dump_url_rdf.'>  ;
+     voidp:processType soton:ConvertTurtleToRDFXML .
+';
+	close PROV;
+	# TODO add sourceDataset and agent
+
+	my $bp_url = "http://data.southampton.ac.uk/dataset/$subset_id.boilerplate.rdf";
+
+	# add boilerplate and publish as RDF
+	my $cmd = "( ";
+	$cmd .= $bin->{rapper}." -q -i turtle -I $final_dump_url_ttl $prov_file -o ntriples -";
+	$cmd .= " ; ";
+	$cmd .= $bin->{curl}." -s '$bp_url?dataset=$subset_id&date=$date' | ".$bin->{rapper}." -q -i rdfxml -I $final_dump_url_ttl -o ntriples -";
+	$cmd .= " ; ";
+	if( -e "./to_triples" )
+	{
+		$cmd .= "cat $rdf_file";
+	}	
+	else
+	{
+		$cmd .= $bin->{rapper}." -q -i rdfxml -I $final_dump_url_ttl $rdf_file -o ntriples";
+	}
+	$cmd .= ") | sort -u | ".$bin->{rapper}." -q -i ntriples -o turtle -I $xml_base - > $final_dump_file_ttl";
+	$LODP->exec_cmd( "Publish Turtle", $cmd );
+	
+	$cmd = $bin->{rapper}." -q -i turtle $final_dump_file_ttl -o rdfxml -O $final_dump_url_rdf > $final_dump_file_rdf";
+	$LODP->exec_cmd( "Publish RDFXML", $cmd );
+	
+	# that all seemed to work, lets clean up temp files
+	foreach my $tmp_file ( keys %tmp_files )
+	{
+		unlink( $tmp_file ) || die "Can't unlink temp file: ".$tmp_file.": $!";
+	}
+}
+else
+{
+	die "valid convert script does not exist." ; 
+}
+## //Publishing Script now complete
+
+## Purge any .private files
+$LODP->exec_cmd( "Purge any *.private files", "rm -rf $target_dir_new/*.private" );
+
+
+if( -e $target_dir ) { $LODP->exec_cmd( "", "rm -rf $target_dir" ); }
+$LODP->exec_cmd( "Make Live", "mv $target_dir_new $target_dir" );
+
+# Write checksums	 
+open( HASHES, ">:utf8", $hashes_file ) || die "Couldn't write  '$hashes_file' $!";
+foreach my $file ( sort keys %{$hashes} )
+{
+	print HASHES $hashes->{$file}." $file\n";
+}
+close HASHES;
+	
+
+# Post publishing hooks:
+{
+	my $cmd;
+	
+	$cmd = "sparql_import $subset_id";
+	$LODP->exec_cmd( "queue sparql import", $cmd );
+	
+	# update ckan 	
+	$cmd = "update_ckan $subset_id";
+	$LODP->exec_cmd( "update CKAN", $cmd );
+}
+
+exit;
+
+sub iso_date
+{
+	my(@lt) = localtime;
+	return sprintf( "%04d-%02d-%02d", $lt[5]+1900, $lt[4]+1, $lt[3] );
+}
+sub iso_datetime
+{
+	my(@lt) = gmtime;
+	return sprintf( "%04d-%02d-%02dT%02d:%02d:%02dZ", $lt[5]+1900, $lt[4]+1, $lt[3], $lt[2],$lt[1],$lt[0] );
+}
+
+package LODPublish;
+
+sub exec_cmd
+{
+	my( $LODP, $msg, $cmd ) = @_;
+
+	if( $msg ne "" ) { print "$msg\n"; }
+	print "% $cmd\n" if( $LODP->{noise} > 1 );
+	print `$cmd`;
+	if ($? == -1) 
+	{
+		print STDERR "failed to execute: $!\n";
+	}
+	elsif ($? & 127) 
+	{
+		printf STDERR "child died with signal %d, %s coredump\n",
+				($? & 127),  ($? & 128) ? 'with' : 'without';
+	}
+	elsif( $? >> 8 != 0 )
+	{
+		printf STDERR "child exited with value %d\n", $? >> 8;
+		exit 1;
+	}
+
+}
+
+
+
+
+__DATA__
+	elsif( $dataset eq "beckers-building-photos" )
+	{
+		$rawrdffile = "$rawrdf/$dataset/$dataset.$date.ttl";
+		$rawrdf_format = "turtle";
+		my $cmd = "$bin/beckers-images-to-triples.pl > $rawrdffile";
+		$LODP->exec_cmd( $cmd );
+	}

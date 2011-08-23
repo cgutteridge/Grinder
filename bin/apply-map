@@ -1,0 +1,55 @@
+#!/usr/bin/perl 
+
+use strict;
+use warnings;
+
+use Text::CSV;
+
+my $csv = Text::CSV->new();
+binmode(STDIN, ":utf8" );
+binmode(STDOUT, ":utf8" );
+
+my $skip_rows = 1;
+my $map_file = $ARGV[0];
+my $field_number = $ARGV[1]-1;
+
+my $map = {};
+open( MAP, "<:utf8", $map_file ) or die "can't read $map_file: $!";
+while( my $line = readline( MAP ) )
+{
+	if( !$csv->parse($line) ) 
+	{
+		my $err = $csv->error_input;
+		die( "Failed to parse line: $err", 1 );
+	}
+	my @row = $csv->fields();
+	$map->{$row[1]} = $row[0];
+}
+close MAP;
+
+	
+my $line_n = 0;	
+while( my $line = readline( STDIN ) )
+{
+	$line_n++;
+	if( !$csv->parse($line) ) 
+	{
+		my $err = $csv->error_input;
+		die( "Failed to parse line: $err", 1 );
+	}
+	if( $skip_rows ) { $skip_rows--; next; }
+	my @row = $csv->fields();
+	if( defined $row[$field_number] && $row[$field_number] ne '' )
+	{
+		my $mapped = $map->{$row[$field_number]};
+		if( !defined $mapped)
+		{
+			die "Unmapped value on line $line_n: \"".$row[$field_number]."\"";
+		}
+		$row[$field_number] = $mapped;
+	}
+
+	$csv->print (*STDOUT, \@row );
+	print "\n";
+}
+

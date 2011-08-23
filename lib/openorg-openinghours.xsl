@@ -11,13 +11,13 @@
 
   <xsl:output method="xml" version="1.0" encoding="UTF-8" indent="yes" omit-xml-declaration="no" />
 
-  <xsl:variable name='base-pos-uri' select='/g:grinder-data/g:set[@id="base-pos-uri"]' />
-  <xsl:variable name='base-offers-uri' select='/g:grinder-data/g:set[@id="base-offers-uri"]' />
-  <xsl:variable name='base-building-uri' select='/g:grinder-data/g:set[@id="base-building-uri"]' />
+  <xsl:variable name='base-pos-uri' select='/g:grinder-data/g:set[@name="base-pos-uri"]' />
+  <xsl:variable name='base-offers-uri' select='/g:grinder-data/g:set[@name="base-offers-uri"]' />
+  <xsl:variable name='base-building-uri' select='/g:grinder-data/g:set[@name="base-building-uri"]' />
 
-  <xsl:variable name='valid-from' select='/g:grinder-data/g:set[@id="VALID_FROM"]' />
-  <xsl:variable name='valid-through' select='/g:grinder-data/g:set[@id="VALID_THROUGH"]' />
-  <xsl:variable name='timezone' select='/g:grinder-data/g:set[@id="TIMEZONE"]' />
+  <xsl:variable name='valid-from' select='/g:grinder-data/g:set[@name="VALID_FROM"]' />
+  <xsl:variable name='valid-through' select='/g:grinder-data/g:set[@name="VALID_THROUGH"]' />
+  <xsl:variable name='timezone' select='/g:grinder-data/g:set[@name="TIMEZONE"]' />
 
   <xsl:template match="/g:grinder-data">
     <rdf:RDF>
