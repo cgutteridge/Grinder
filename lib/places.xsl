@@ -88,6 +88,12 @@
     </xsl:if>
   </xsl:template>
 
+  <xsl:template match="g:access|s:access|b:access|r:access">
+    <xsl:if test="string(.) != ''">
+    <oo:access><xsl:value-of select="string(.)"/></oo:access>
+    </xsl:if>
+  </xsl:template>
+
   <xsl:template match="g:page|s:page|b:page|r:page">
     <xsl:if test="string(.) != ''">
     <foaf:page rdf:resource="{string(.)}" />
