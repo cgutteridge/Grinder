@@ -1,0 +1,45 @@
+#!/usr/bin/perl -I perl_lib/
+
+# License: GPL
+# Copyright: University of Southampton 2011
+# Author: Christopher Gutteridge; http://id.ecs.soton.ac.uk/person/1248
+
+use strict;
+use warnings;
+use Spreadsheet::ParseExcel; 
+
+my $in = $ARGV[0];
+
+my $parser = Spreadsheet::ParseExcel->new();
+my $workbook = $parser->parse( $in );
+if ( !defined $workbook ) 
+{
+	die error( "Failed to parse Excel file: ".$parser->error() );
+}
+
+my @worksheets = $workbook->worksheets();
+for( my $i=0;$i<scalar @worksheets;++$i )
+{
+	my $worksheet = $worksheets[$i];	
+	my $fn= "$in.".($i+1).".csv";
+	open( OUT, ">$fn") || die "Can't write $fn: $!";
+	my ( $row_min, $row_max ) = $worksheet->row_range();
+	my ( $col_min, $col_max ) = $worksheet->col_range();
+	
+	for my $row ( 0 .. $row_max ) 
+	{
+		my @cells = ();
+		for my $col ( 0 .. $col_max ) 
+		{
+			my $cell = $worksheet->get_cell( $row, $col );
+			my $v;
+			if( $cell ) { $v =  $cell->value; }
+			$v="" if !defined $v;
+			$v=~s/"/""/g;
+			push @cells, '"'.$v.'"';
+		}
+		print OUT join(",",@cells)."\n";
+	}
+
+	close OUT;
+}
