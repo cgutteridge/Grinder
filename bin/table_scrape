@@ -1,0 +1,41 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+my $url = $ARGV[0];
+my $table_n = 0;
+my $strip_tags = 1;
+
+my $html = join( '', `curl -s $url` );
+
+my @tables = split( /<table/i, $html );
+shift @tables;
+
+my $table = $tables[$table_n];
+
+my @rows = split( /<tr/i, $table );
+foreach my $row ( @rows )
+{
+	my @cells = split( /<t[dh]/i, $row );
+	shift @cells;
+	my @outcells;
+	foreach my $cell ( @cells )
+	{
+		$cell =~ s/^[^>]*>//;
+		$cell =~ s/<\/t[dh]>.*$//is;
+		$cell=~s/[\r\n]+/ /g;
+		if( $strip_tags ) 	
+		{ 
+			$cell =~ s/<[^>]+>//g; 
+			$cell =~ s/&gt;/>/g;
+			$cell =~ s/&lt;/</g;
+			$cell =~ s/&quot;/"/g;
+			$cell =~ s/&amp;/&/g;
+		}
+		$cell=~s/"/""/g;
+		push @outcells, '"'.$cell.'"';
+	}
+	print join(",",@outcells)."\n";
+}
+	
