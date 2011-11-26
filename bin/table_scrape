@@ -1,41 +1,141 @@
 #!/usr/bin/perl
 
+# GPL 2.0
+
 use strict;
 use warnings;
 
-my $url = $ARGV[0];
-my $table_n = 0;
-my $strip_tags = 1;
+use Getopt::Long;
 
-my $html = join( '', `curl -s $url` );
+Getopt::Long::Configure("permute");
+
+my $show_help;
+my $show_version;
+my $verbose;
+my $quiet;
+
+my %options = (
+	table=>undef,
+	noise=>1,
+	dehtml=>0,
+	maxrows=>undef,
+);
+	
+GetOptions( 
+	'help|?' => \$show_help,
+	'version' => \$show_version,
+
+	'verbose+' => \$verbose,
+	'quiet' => \$quiet,
+
+	'table=i' => \$options{table_n},
+	'dehtml' => \$options{dehtml},
+	'maxrows' => \$options{maxrows},
+
+) || show_usage(1);
+#use Data::Dumper;print Dumper( \%options );exit;
+
+show_version() if $show_version;
+
+show_help() if $show_help;
+
+show_usage(1) if( scalar @ARGV != 1 ); 
+
+$options{noise} = 0 if( $quiet );
+$options{noise} = 1+$verbose if( $verbose );
+
+$options{url} = $ARGV[0];
+
+##################### ##################### #####################
+
+my $html = join( '', `curl -s $options{url}` );
 
 my @tables = split( /<table/i, $html );
 shift @tables;
 
-my $table = $tables[$table_n];
-
-my @rows = split( /<tr/i, $table );
-foreach my $row ( @rows )
+if( defined $options{table_n} )
 {
-	my @cells = split( /<t[dh]/i, $row );
-	shift @cells;
-	my @outcells;
-	foreach my $cell ( @cells )
+	output_table( $tables[$options{table_n}-1], %options );
+}
+else
+{
+	$options{maxrows}=5 unless defined $options{maxrows};
+	print "\n";
+	for( my $i=0; $i<scalar @tables; ++$i )
 	{
-		$cell =~ s/^[^>]*>//;
-		$cell =~ s/<\/t[dh]>.*$//is;
-		$cell=~s/[\r\n]+/ /g;
-		if( $strip_tags ) 	
-		{ 
-			$cell =~ s/<[^>]+>//g; 
-			$cell =~ s/&gt;/>/g;
-			$cell =~ s/&lt;/</g;
-			$cell =~ s/&quot;/"/g;
-			$cell =~ s/&amp;/&/g;
-		}
-		$cell=~s/"/""/g;
-		push @outcells, '"'.$cell.'"';
+		print "TABLE: ".($i+1)."\n";
+		output_table( $tables[$i], %options );
+		print "\n";
 	}
-	print join(",",@outcells)."\n";
+}
+
+exit;
+
+##################### ##################### #####################
+
+sub output_table
+{
+	my( $table, %opts ) = @_;
+
+	my @rows = split( /<tr/i, $table );
+	shift @rows;
+	my $i = 0;
+	foreach my $row ( @rows )
+	{
+		my @cells = split( /<t[dh]/i, $row );
+		shift @cells;
+		my @outcells;
+		foreach my $cell ( @cells )
+		{
+			$cell =~ s/^[^>]*>//;
+			$cell =~ s/<\/t[dh]>.*$//is;
+			$cell=~s/[\r\n]+/ /g;
+			if( $opts{dehtml} ) 	
+			{ 
+				$cell =~ s/<[^>]+>//g; 
+				$cell =~ s/&gt;/>/g;
+				$cell =~ s/&lt;/</g;
+				$cell =~ s/&quot;/"/g;
+				$cell =~ s/&amp;/&/g;
+			}
+			$cell=~s/"/""/g;
+			push @outcells, '"'.$cell.'"';
+		}
+		print join(",",@outcells)."\n";
+		$i++;
+		last if( defined $opts{maxrows} && $i == $opts{maxrows} ) ;
+	}
+}	
+##################### ##################### #####################
+
+sub show_version
+{
+	print "I really should give stuff proper version numbers, but let's just say:\n";
+	print "$0: 1.0.0\n";
+	exit;
+}
+
+sub show_usage
+{
+	my( $rc ) = @_;
+
+	print <<END;
+$0 [--table=<INT>] [--dehtml] [--verbose]* [--quiet] <url>
+END
+	exit $rc;
 }
 	
+sub show_help
+{
+	print <<END;
+$0 [--table=<INT>] [--dehtml] [--verbose]* [--quiet] <url>
+
+--table : pick which table to convert, if none specified will just show the tops of each table.
+
+--dehtml : remove HTML elements from cells, and convert &amp; etc. to normal characters.
+
+Part of RDF Grinder Tools by Christopher Gutteridge. 2011. GPL.
+END
+	exit 0;
+}
+
