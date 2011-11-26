@@ -38,7 +38,6 @@ $LODP->{noise} = 1;
 $LODP->{noise} = 0 if( $quiet );
 $LODP->{noise} = 1+$verbose if( $verbose );
 
-my $start_datetime = iso_datetime();
 my $date = iso_date();
 
 my $bin = {};
@@ -108,6 +107,7 @@ chdir( $target_dir_new );
 
 # Download/copy any simple URLs and iles into hopper
 my $download_cfg = "./download.cfg";
+my $prov = { download=>{} };
 if( -e $download_cfg )
 {
 	open( DOWNLOAD, "<:utf8", $download_cfg ) || die "Couldn't read  '$download_cfg' $!";
@@ -128,7 +128,9 @@ if( -e $download_cfg )
 		
 		if( $url =~ m/^[a-z]+:/ ) 
 		{
+			$prov->{download}->{$filename}= { src=>$url, start=>iso_datetime() };
 			print $LODP->exec_cmd( "Download $url to $filename", "curl -Ss '$url' > '$filename'" );
+			$prov->{download}->{$filename}->{end}=iso_datetime();
 		}
 		else
 		{
@@ -226,6 +228,7 @@ if( !$changed )
 }
 
 	
+my $start_datetime = iso_datetime();
 
 if( -e "./prepare" )
 {
@@ -256,7 +259,6 @@ elsif( -e "./to_rdfxml" or -e "./to_triples" )
 		$tmp_files{$rdf_file} = 1;
 		print $LODP->exec_cmd( "Create Triples as RDF/XML", "./to_rdfxml" );
 	}
-
 	my $prov_file = "$tmp_dir/data.prov.ttl.$$";
 	$tmp_files{$prov_file} = 1;
 	open( PROV, ">:utf8", "$prov_file" ) || die "Couldn't write provenance triples to '$prov_file' $!";
@@ -296,6 +298,22 @@ elsif( -e "./to_rdfxml" or -e "./to_triples" )
      voidp:resultingDataset <'.$final_dump_url_rdf.'>  ;
      voidp:processType soton:ConvertTurtleToRDFXML .
 ';
+
+	foreach my $file ( keys %{$prov->{download}} )
+	{
+		my $pinfo = $prov->{download}->{$file};
+		my $file_uri = $target_base_url.'/'.$target_path.'/'.$file;
+		my $event_uri = $file_uri.'#provenance';
+		print PROV '
+<'.$event_uri.'> rdf:type voidp:ProvenanceEvent ;
+     voidp:sourceDataset <'.$pinfo->{src}.'> ;
+     voidp:resultingDataset <'.$file_uri.'>  ;
+     voidp:processType soton:DownloadViaHTTP ;
+     to:hasBeginning "'.$pinfo->{start}.'"^^xsd:dateTime ;
+     to:hasEnd "'.$pinfo->{end}.'"^^xsd:dateTime .
+';
+	}
+
 	close PROV;
 	# TODO add sourceDataset and agent
 
