@@ -1,0 +1,30 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+if( scalar @ARGV != 4 ) { print "$0 <docid> <format> <username> <password>\n"; exit 1; }
+my( $doc, $format, $username, $password ) = @ARGV;
+#my $doc = '0AqodCQwjuWZXdDZqcm0tYmFGMVpDOG1obnctUXdhb0E';
+#my $format = 'tsv';
+#my $username = 'open.data.southampton@gmail.com';
+#my $password = 'XXXXX';
+my $gid = 0;
+
+my @result = `curl -s https://www.google.com/accounts/ClientLogin --data 'Email=$username&Passwd=$password&scope=https://spreadsheets.google.com/feeds/&service=wise&session=1'`; 
+my $auth;
+foreach my $line ( @result )
+{	
+	if( $line =~ s/^Auth=// )
+	{
+		chomp $line;
+		$auth = $line;
+	}
+}
+if( !defined $auth )
+{
+	die "Failed to authenticate $username";
+}
+$auth =~ s/[^A-Z0-9-_]//i; # sigh, better safe than sorry.
+
+print `curl -s -H 'Authorization: GoogleLogin auth=$auth' 'https://spreadsheets.google.com/feeds/download/spreadsheets/Export?key=$doc&exportFormat=$format&gid=$gid' `;
