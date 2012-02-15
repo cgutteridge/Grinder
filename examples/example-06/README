@@ -1,63 +1,89 @@
-Added to XSL:
+Added to Config:
 
-    xmlns:foaf="http://xmlns.com/foaf/0.1/"
+in: people.csv format=csv namespace=people    (added the namespace=people)
+xslt: people.xsl
 
-          <rdf:type rdf:resource="http://xmlns.com/foaf/0.1/Person" />
- 
-          <foaf:name>
-            <xsl:value-of select='people:given-name' />
-            <xsl:text> </xsl:text>
-            <xsl:value-of select='people:family-name' />
-          </foaf:name>
-
-          <xsl:if test='people:tel/text()'>
-             <foaf:phone rdf:resource='tel:{people:tel}' />
-          </xsl:if>
-
+Added the XSL file people.xsl
 
 ----------------------------------------------------------------------
 
-In this step we add some initial triples. First of all is a very 
-simple one which says this resource is rdf:type foaf:Person (nb. we 
-can't use the foaf:Person abbreviation inside an rdf:resource. This is
-because rdf+xml is annoying. A short cut for this is to change the 
-<rdf:Description> to be <foaf:Person> instead. This is shorter and 
-easier to read, but not necissary so it's ommitted in these examples.
+If you don't specify a namespace for an input file, it defaults to:
+http://purl.org/openorg/grinder/ns/
+This doesn't matter if you only want to process one type of file as 
+"in" can be repeated with different namespaces. It can be useful to 
+have several. For a conference we have people, places, sessions, etc.
+we actually have two in the sessions namespace, one for offical ones
+and an additional sessions table.
 
-The <foaf:name> predicate means we've had to add xmlns:foaf to the top
-of the file.
+Adding the namespace directive to the config changes the XML from 
+  <g:row filename='people.csv'>
+	<g:id>0003</g:id>
+	<g:given-name>Patrick</g:given-name>
+to 
+  <people:row filename='people.csv'>
+	<people:id>0003</people:id>
+	<people:given-name>Patrick</people:given-name>
 
-In the previous example we used {people:id} inside the rdf:about 
-attribute. To get values when not inside attributes, we have to use
-the more verbose form of <xsl:value-of select="people:id" />. In the 
-example above we've had to use <xsl:text> to put a space between the
-parts of the name. This is because the block started with a tag, not
-text, and XSLT then treats it a bit differently and ignores whitespace.
+Adding the xslt directive means that rather than output the XML, 
+grinder will pass it through the specified XSLT to transform it.
+(note XSL and XSLT are the same thing, we use them a bit 
+interchangably; sorry about that)
 
-Not everybody has a phone number so we use xsl:if to check it first. 
-Phone numbers have their own URI scheme (tel:) so we declare them as
-a resource, not a literal.
+Here's the XSLT with comments:
 
-== RDF+XML & XSLT shortcuts
+<?xml version="1.0" encoding='utf-8'?>
+<xsl:stylesheet version="1.0" 
 
-You could change the <rdf:Description> block to:
+** This is the namespace for XSLT directives in the transform.
+    xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
 
-        <foaf:Person 
-		rdf:about="http://graphite.ecs.soton.ac.uk/example-things/people/{people:id}"
-		foaf:name="{people:given-name} {people:family-name}"
-	>
-          <xsl:if test='people:tel/text()'>
-             <foaf:phone rdf:resource='tel:{people:tel}' />
-          </xsl:if>
-        </foaf:Person>
+** These are very common RDF namespaces, I always add them at the top.
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
 
-(you can't put the foaf:phone in an attribute, because we need to put 
-the xsl:if around it)
+** These are namespaces in the XML file produced by grinder
+    xmlns:g="http://purl.org/openorg/grinder/ns/"
+    xmlns:people="http://purl.org/openorg/grinder/ns/people/"
+>
 
-This is shorter but we'll not use it in these examples as it introduces
-more complexity. It's in people.xsl.shortcuts if you want a look. You
-can override the XSLT file used by grinder:
+** Some sensible defaults
+  <xsl:output method="xml" version="1.0" encoding="UTF-8" indent="yes" omit-xml-declaration="no" />
 
-../../bin/grinder --config people.cfg  --xslt people.xsl.shortcuts
+** This template matches the top level of our XML (g:grinder-data) and loops over every <people:row> 
+** in turn (using for-each)
+  <xsl:template match="/g:grinder-data">
+    <rdf:RDF>
 
+      <xsl:for-each select="people:row">
 
+** inside the for-each our "context" is the row, so {people:id} is the value of the tag in the row 
+** called that.
+
+        <rdf:Description rdf:about="http://graphite.ecs.soton.ac.uk/example-things/people/{people:id}">
+ 
+        </rdf:Description>
+
+      </xsl:for-each>
+
+    </rdf:RDF>
+  </xsl:template>
+
+</xsl:stylesheet>
+
+You can try this, from this directory, using
+
+grinder --config people.cfg
+
+The XML is now passed through the XSLT and RDF+XML is produced!
+
+It's handy to sometimes stop the XSLT step, and see what the XML
+output would be. You do this by overriding the xslt option, but 
+make it empty:
+
+grinder --config people.cfg --xslt ''
+
+Anyhow, the results are valid, but actually contain ZERO triples,
+as we've defined a URI for the Person each row describes, but made
+no statements about them!
