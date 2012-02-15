@@ -130,8 +130,9 @@ Usage: $0 [OPTION]... [--config filename]
 
  --process <x>=<y>,...  Add attributes to the XML cell with heading <x>.
                          attributes include "tag" and "md5" and "sha1",
-                         "mbox_sha1sum", "ftag", "fname". You can use a *
-                         in the <x> section to match zero or more characters.
+                         "mbox_sha1sum", "ftag", "fname", "mediawiki". 
+                         You can use a * in the <x> section to match 
+                         zero or more characters.
                           
                                
  --include <filename>   Include the XML from <filename> at the top of the XML
@@ -648,6 +649,7 @@ sub process_row
 
 	my $p = $prefix.":";
 	if( $prefix eq "" ) { $p = ""; }
+
 	my $filename = $self->{parse}->{filename};
 	$filename =~ s/&/&amp;/g;
 	$filename =~ s/>/&gt;/g;
@@ -673,6 +675,7 @@ sub process_row
 		$value =~ s/\s+$//;
 
 		my @values;
+
 		if( $self->{delineator}->{$p.$field} )
 		{
 			my $del = $self->{delineator}->{$p.$field};
@@ -722,6 +725,12 @@ sub process_row
 					{
 						use Digest::SHA1 qw(sha1_hex);
 						$attrs.=" mbox_sha1sum='".sha1_hex("mailto:$value")."'";
+					}
+					elsif( $type eq "mediawiki" )
+					{
+						my $tagname = ucfirst $value;
+						$tagname =~ s/ /_/g;
+						$attrs.=" mediawiki='$tagname'";
 					}
 					elsif( $type eq "tag" )
 					{
