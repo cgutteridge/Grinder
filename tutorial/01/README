@@ -1,0 +1,37 @@
+
+Each of these examples builds on the previous ones, and the initial
+block tells you what's changed from last time.
+
+----------------------------------------------------------------------
+
+Added a config file, people.cfg which just contains
+
+in: people.csv format=csv 
+
+And a people.csv file with a bunch of stuff about some people... feel
+free to add yourself and some friends to it!
+
+----------------------------------------------------------------------
+
+With no other configuration, grinder just converts the input file
+to XML. It creates a <g:row>  for every row in the table and a tag 
+inside that for each column. It uses the first row to get the names
+of the columns. These can't contain spaces or other weird characters
+so a column title of "My Column!" becomes <g:my-column>
+
+First set the path to the libraries (this isn't necisary if the CSV
+perl module is installed on your machine already, but we bundle it
+with the Grinder download to save messing around)
+
+export PATH=$PATH:/Users/cjg/Projects/Grinder/bin/
+export PERLLIB=/Users/cjg/Projects/Grinder/perl_lib/
+Where this is the path to the perl_lib which came with RDF-Grinder, and
+likewise for bin
+
+Now you can see the output from your CSV file:
+
+grinder --config people.cfg
+
+Almost all the configuration file options are also available via 
+the command line. Run grinder with --help for a list.
+

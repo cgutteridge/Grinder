@@ -1,0 +1,89 @@
+Added to Config:
+
+in: people.csv format=csv namespace=people    (added the namespace=people)
+xslt: people.xsl
+
+Added the XSL file people.xsl
+
+----------------------------------------------------------------------
+
+If you don't specify a namespace for an input file, it defaults to:
+http://purl.org/openorg/grinder/ns/
+This doesn't matter if you only want to process one type of file as 
+"in" can be repeated with different namespaces. It can be useful to 
+have several. For a conference we have people, places, sessions, etc.
+we actually have two in the sessions namespace, one for offical ones
+and an additional sessions table.
+
+Adding the namespace directive to the config changes the XML from 
+  <g:row filename='people.csv'>
+	<g:id>0003</g:id>
+	<g:given-name>Patrick</g:given-name>
+to 
+  <people:row filename='people.csv'>
+	<people:id>0003</people:id>
+	<people:given-name>Patrick</people:given-name>
+
+Adding the xslt directive means that rather than output the XML, 
+grinder will pass it through the specified XSLT to transform it.
+(note XSL and XSLT are the same thing, we use them a bit 
+interchangably; sorry about that)
+
+Here's the XSLT with comments:
+
+<?xml version="1.0" encoding='utf-8'?>
+<xsl:stylesheet version="1.0" 
+
+** This is the namespace for XSLT directives in the transform.
+    xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+
+** These are very common RDF namespaces, I always add them at the top.
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+
+** These are namespaces in the XML file produced by grinder
+    xmlns:g="http://purl.org/openorg/grinder/ns/"
+    xmlns:people="http://purl.org/openorg/grinder/ns/people/"
+>
+
+** Some sensible defaults
+  <xsl:output method="xml" version="1.0" encoding="UTF-8" indent="yes" omit-xml-declaration="no" />
+
+** This template matches the top level of our XML (g:grinder-data) and loops over every <people:row> 
+** in turn (using for-each)
+  <xsl:template match="/g:grinder-data">
+    <rdf:RDF>
+
+      <xsl:for-each select="people:row">
+
+** inside the for-each our "context" is the row, so {people:id} is the value of the tag in the row 
+** called that.
+
+        <rdf:Description rdf:about="http://graphite.ecs.soton.ac.uk/example-things/people/{people:id}">
+ 
+        </rdf:Description>
+
+      </xsl:for-each>
+
+    </rdf:RDF>
+  </xsl:template>
+
+</xsl:stylesheet>
+
+You can try this, from this directory, using
+
+grinder --config people.cfg
+
+The XML is now passed through the XSLT and RDF+XML is produced!
+
+It's handy to sometimes stop the XSLT step, and see what the XML
+output would be. You do this by overriding the xslt option, but 
+make it empty:
+
+grinder --config people.cfg --xslt ''
+
+Anyhow, the results are valid, but actually contain ZERO triples,
+as we've defined a URI for the Person each row describes, but made
+no statements about them!

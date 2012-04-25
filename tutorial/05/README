@@ -1,0 +1,62 @@
+Added to Config:
+
+delineator: people:likes-eating=;
+process: people:likes-eating=tag
+
+Added to XSLT:
+
+    xmlns:myns="http://graphite.ecs.soton.ac.uk/example-ns/"
+
+          <xsl:for-each select='people:likes-eating'>
+             <myns:likes-eating>
+                <rdf:Description rdf:about='http://graphite.ecs.soton.ac.uk/example-things/food/{./@tag}'>
+                   <rdf:type rdf:resource="http://graphite.ecs.soton.ac.uk/example-ns/Food" />
+                   <rdf:label><xsl:value-of select='.' /></rdf:label>
+                </rdf:Description>
+             </myns:likes-eating>
+          </xsl:for-each>
+
+----------------------------------------------------------------------
+This example adds a delineator to the likes-eating field. This means
+we get one XML tag for each item. Adding this to the config:
+
+delineator: people:likes-eating=;
+
+Changes the XML output (passed to XSLT) 
+
+from...
+
+<people:likes-eating>Cheese;Ham;Fish and Chips</people:likes-eating>
+
+to...
+
+<people:likes-eating>Cheese</people:likes-eating>
+<people:likes-eating>Ham</people:likes-eating>
+<people:likes-eating>Fish and Chips</people:likes-eating>
+
+Which means we can use <xsl:for-each> in the XSL to loop over it.
+
+We use a processing directive:
+
+process: likes-eating=tag
+
+To give us a sanitised version of the food name we can use in a
+URI for it:
+
+<people:likes-eating tag='Cheese'>Cheese</people:likes-eating>
+<people:likes-eating tag='Ham'>Ham</people:likes-eating>
+<people:likes-eating tag='FishAndChips'>Fish and Chips</people:likes-eating>
+
+Which we can get at using the /@tag syntax. Note that inside the 
+loop the 'current' XML tag is now the <people:likes-eating> tag (well,
+each one in turn), and not the <people:row>. 
+
+We use myns:likes-eating to describe what someone likes eating. FOAF
+doesn't define this so we've invented this in our own namespace. We
+also give each food URI a label and a type. Note we've added an xmlns
+at the top of the XSLT file.
+
+Because "Cheese" is repeated by more than one person row, the 
+resulting data actually ends up repeating the triples for the label &
+type of cheese. If you want to clean this up, a command line tool
+called "rapper" can do this fairly easily.
