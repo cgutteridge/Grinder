@@ -1,4 +1,4 @@
-#!/usr/bin/perl -I perl_lib/
+#!/usr/bin/perl -I perl_lib
 
 # TODO: syntax in XSLT to check required constants are SET
 
@@ -40,7 +40,6 @@ GetOptions(
 	'worksheet=i' => \$options{"worksheet"},
 	'skip-rows=i' => \$options{"skip-rows"},
 	'skip-cols=i' => \$options{"skip-cols"},
-
 	'config=s' => $options{"config"},
 	'include=s' => $options{"include"},
 	'set=s' => $options{"set"},
@@ -101,7 +100,8 @@ Usage: $0 [OPTION]... [--config filename]
                          csv (default) - Comma separated values
                          tsv - Tab separated values
                          psv - Pipe character separated values (eg. biztalk)
-                         excel - Excel document (.xsl NOT .xslx)
+                         excel - Excel document
+                         excelx - Excel document
                          colon - Colon-separated (eg. passwd)
 
  --worksheet <number>   For multi sheet files, which sheet (default 1)
@@ -174,7 +174,7 @@ use warnings;
 # out (default -)
 # xslt
 # format (default csv)
-# worksheet (default 1), excel format only
+# worksheet (default 1), excel & excelx formats only
 # skip-rows 
 # skip-cols 
 # config = [] or $
@@ -453,6 +453,7 @@ sub grind
 		my $format = $self->{format};
 		my $charset = "UTF-8";
 		my $worksheet = $self->{worksheet};
+		my $table_n = 0;
 		$self->{parse}->{"skip-rows"} = $self->{"skip-rows"};
 		$self->{parse}->{"skip-cols"} = $self->{"skip-cols"};
 		my $prefix = "";
@@ -492,6 +493,7 @@ sub grind
 		delete $self->{parse}->{fields};	
 		delete $self->{parse}->{fields_names};	
 		if( $format eq "excel" ) { $self->process_excel( $in_fh, $xml_out_fh, $prefix, $worksheet ); }
+		elsif( $format eq "excelx" ) { $self->process_excelx( $in_file, $xml_out_fh, $prefix, $worksheet ); }
 		elsif( $format eq "csv" ) { $self->process_csv( $in_fh, $xml_out_fh, $prefix ); }
 		elsif( $format eq "tsv" ) { $self->process_tsv( $in_fh, $xml_out_fh, $prefix ); }
 		elsif( $format eq "colon" ) { $self->process_colon( $in_fh, $xml_out_fh, $prefix ); }
@@ -779,16 +781,47 @@ sub process_excel
 {
 	my( $self, $in, $out, $prefix, $worksheet_number ) = @_;
 
-	if( ! eval 'use Spreadsheet::ParseExcel; 1;' ) 
+	if( ! eval 'use Spreadsheet::ParseExcel; 1;' )
 	{
 		$self->error( "Failed to load Perl Module: Spreadsheet::ParseExcel: $@" );
-	}	
+	}
 	my $parser = Spreadsheet::ParseExcel->new();
 	my $workbook = $parser->parse( $in );
-	if ( !defined $workbook ) 
+	if ( !defined $workbook )
 	{
 		$self->error( "Failed to parse Excel file: ".$parser->error() );
 	}
+
+	$self->process_excel_workbook_object( $workbook, $out, $prefix, $worksheet_number );
+}
+sub process_excelx
+{
+	my( $self, $in_fn, $out, $prefix, $worksheet_number ) = @_;
+
+	#if( ! eval 'use Spreadsheet::ParseExcel; 1;' ) 
+	if( ! eval 'use Spreadsheet::XLSX; 1;' ) 
+	{
+		$self->error( "Failed to load Perl Module: Spreadsheet::ParseExcel: $@" );
+	}	
+	if( ! eval 'use Text::Iconv; 1;' ) 
+	{
+		$self->error( "Failed to load Perl Module: Spreadsheet::ParseExcel: $@" );
+	}	
+ 	my $converter = Text::Iconv -> new ("utf-8", "windows-1251");
+	
+	no warnings; 
+	my $workbook = Spreadsheet::XLSX->new( $in_fn, $converter );
+	use warnings; 
+	if ( !defined $workbook ) 
+	{
+		$self->error( "Failed to parse ExcelX file $in_fn." );
+	}
+	$self->process_excel_workbook_object( $workbook, $out, $prefix, $worksheet_number );
+}
+
+sub process_excel_workbook_object
+{
+	my( $self, $workbook, $out, $prefix, $worksheet_number ) = @_;
 
 	$worksheet_number = 1 unless defined $worksheet_number;
 	my @worksheets = $workbook->worksheets();
