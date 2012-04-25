@@ -1,3 +1,0 @@
-#!
-curl -s http://sparql.data.southampton.ac.uk/admin/delete/ --data 'store=soton_store&urls=http://id.southampton.ac.uk/dataset/'$1'/latest'
-
