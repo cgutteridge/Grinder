@@ -814,7 +814,7 @@ sub process_excelx
 	}	
 	if( ! eval 'use Text::Iconv; 1;' ) 
 	{
-		$self->error( "Failed to load Perl Module: Spreadsheet::ParseExcel: $@" );
+		$self->error( "Failed to load Perl Module: Text::Iconv: $@" );
 	}	
  	my $converter = Text::Iconv -> new ("utf-8", "windows-1251");
 	
