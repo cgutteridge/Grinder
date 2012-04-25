@@ -14,7 +14,7 @@ my $parser = Spreadsheet::ParseExcel->new();
 my $workbook = $parser->parse( $in );
 if ( !defined $workbook ) 
 {
-	die error( "Failed to parse Excel file: ".$parser->error() );
+	die "Failed to parse Excel file: ".$parser->error();
 }
 
 my @worksheets = $workbook->worksheets();
