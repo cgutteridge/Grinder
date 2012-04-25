@@ -49,7 +49,6 @@ my $target_base_url = "http://data.southampton.ac.uk/dumps";
 my $tmp_dir = "/var/wwwsites/var/hopper";
 my $xml_base = "http://id.southampton.ac.uk";
 
-
 $bin->{rapper} = "/usr/local/bin/rapper";
 $bin->{grinder} = "/var/wwwsites/Grinder/bin/grinder";
 $bin->{cp} = "/bin/cp";
@@ -194,13 +193,13 @@ foreach my $file ( keys %{$hashes} )
 {
 	if( !defined $old_hashes->{$file} )
 	{
-		print STDERR "New file: $file\n";
+		print STDERR "New file: $file\n" if( $LODP->{noise} > 0 );
 		$changed = 1;
 		next;
 	}
 	if( $hashes->{$file} ne $old_hashes->{$file} )
 	{
-		print STDERR "Changed file: $file\n";
+		print STDERR "Changed file: $file\n" if( $LODP->{noise} > 0 );
 		$changed = 1;
 		next;
 	}
@@ -212,19 +211,19 @@ if( !$changed && scalar @missing )
 {
 	foreach my $file ( @missing )
 	{
-		print STDERR "Removed file: $file\n";
+		print STDERR "Removed file: $file\n" if( $LODP->{noise} > 0 );
 	}
 	$changed = 1;
 }
 
 if( !$changed )
 {
-	print STDERR "No Changes to files.\n";
+	print STDERR "No Changes to files.\n" if( $LODP->{noise} > 0 );
 	if( !$force )
 	{
 		exit 0;
 	}	
-	print STDERR "Continuing due to --force\n";
+	print STDERR "Continuing due to --force\n" if( $LODP->{noise} > 0 );
 }
 
 	
@@ -374,9 +373,9 @@ close HASHES;
 	$cmd = "sparql_import $subset_id";
 	$LODP->exec_cmd( "queue sparql import", $cmd );
 	
-	# update ckan 	
-	$cmd = "update_ckan $subset_id";
-	$LODP->exec_cmd( "update CKAN", $cmd );
+#	# update ckan 	
+#	$cmd = "update_ckan $subset_id";
+#	$LODP->exec_cmd( "update CKAN", $cmd );
 }
 
 exit;
@@ -393,12 +392,12 @@ sub iso_datetime
 }
 
 package LODPublish;
-
+use Data::Dumper;
 sub exec_cmd
 {
 	my( $LODP, $msg, $cmd ) = @_;
 
-	if( $msg ne "" ) { print "$msg\n"; }
+	if( $msg ne "" &&  $LODP->{noise} > 0 ) { print "$msg\n"; }
 	print "% $cmd\n" if( $LODP->{noise} > 1 );
 	print `$cmd`;
 	if ($? == -1) 
