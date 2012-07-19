@@ -1,0 +1,19 @@
+
+----------------------------------------------------------------------
+This example introduces "backwards" predicates that refer to the topic 
+of the row, rather than the other way around.
+
+Specifically foaf:member which relates a group to a member. All the 
+triples we've create so far were relating the person to a thing, this
+is the opposite.
+
+Note the use of the 'mediawiki' tag to convert the name to the value
+used on dbpedia URIs (well, converts " " to "_").
+
+Note we have to generate the URI of the person again here. In more
+complex examples it may be worth using <xsl:variable> to define it
+once at the top of the bit which processes each row.
+
+In the XSLT, we use {../people:id} to get to the ID of the person
+as our context inside the for-each is the tags that are the subject
+of the loop which are one 'deeper' in the XML tree. 

@@ -130,8 +130,9 @@ Usage: $0 [OPTION]... [--config filename]
 
  --process <x>=<y>,...  Add attributes to the XML cell with heading <x>.
                          attributes include "tag" and "md5" and "sha1",
-                         "mbox_sha1sum", "ftag", "fname". You can use a *
-                         in the <x> section to match zero or more characters.
+                         "mbox_sha1sum", "ftag", "fname", "mediawiki". 
+                         You can use a * in the <x> section to match 
+                         zero or more characters.
                           
                                
  --include <filename>   Include the XML from <filename> at the top of the XML
@@ -650,6 +651,7 @@ sub process_row
 
 	my $p = $prefix.":";
 	if( $prefix eq "" ) { $p = ""; }
+
 	my $filename = $self->{parse}->{filename};
 	$filename =~ s/&/&amp;/g;
 	$filename =~ s/>/&gt;/g;
@@ -675,6 +677,7 @@ sub process_row
 		$value =~ s/\s+$//;
 
 		my @values;
+
 		if( $self->{delineator}->{$p.$field} )
 		{
 			my $del = $self->{delineator}->{$p.$field};
@@ -713,7 +716,10 @@ sub process_row
 					if( $type eq "md5" )
 					{
 						use Digest::MD5 qw(md5 md5_hex md5_base64);;
-						$attrs.=" md5='".md5_hex($value)."'";
+						use utf8;
+						my $bytes = $value;
+						utf8::encode($bytes);
+						$attrs.=" md5='".md5_hex($bytes)."'";
 					}
 					elsif( $type eq "sha1" )
 					{
@@ -724,6 +730,12 @@ sub process_row
 					{
 						use Digest::SHA1 qw(sha1_hex);
 						$attrs.=" mbox_sha1sum='".sha1_hex("mailto:$value")."'";
+					}
+					elsif( $type eq "mediawiki" )
+					{
+						my $tagname = ucfirst $value;
+						$tagname =~ s/ /_/g;
+						$attrs.=" mediawiki='$tagname'";
 					}
 					elsif( $type eq "tag" )
 					{
@@ -798,14 +810,13 @@ sub process_excelx
 {
 	my( $self, $in_fn, $out, $prefix, $worksheet_number ) = @_;
 
-	#if( ! eval 'use Spreadsheet::ParseExcel; 1;' ) 
 	if( ! eval 'use Spreadsheet::XLSX; 1;' ) 
 	{
-		$self->error( "Failed to load Perl Module: Spreadsheet::ParseExcel: $@" );
+		$self->error( "Failed to load Perl Module: Spreadsheet::XLSX: $@" );
 	}	
 	if( ! eval 'use Text::Iconv; 1;' ) 
 	{
-		$self->error( "Failed to load Perl Module: Spreadsheet::ParseExcel: $@" );
+		$self->error( "Failed to load Perl Module: Text::Iconv: $@" );
 	}	
  	my $converter = Text::Iconv -> new ("utf-8", "windows-1251");
 	
