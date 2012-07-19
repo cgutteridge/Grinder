@@ -49,7 +49,6 @@ my $target_base_url = "http://data.southampton.ac.uk/dumps";
 my $tmp_dir = "/var/wwwsites/var/hopper";
 my $xml_base = "http://id.southampton.ac.uk";
 
-
 $bin->{rapper} = "/usr/local/bin/rapper";
 $bin->{grinder} = "/var/wwwsites/Grinder/bin/grinder";
 $bin->{cp} = "/bin/cp";
@@ -227,6 +226,10 @@ if( !$changed )
 	print STDERR "Continuing due to --force\n";
 }
 
+
+
+
+
 	
 my $start_datetime = iso_datetime();
 
@@ -251,6 +254,10 @@ elsif( -e "./to_rdfxml" or -e "./to_triples" )
 		$rdf_file = "$tmp_dir/data.nt.$$";
 		$tmp_files{$rdf_file} = 1;
 		print $LODP->exec_cmd( "Create Triples", "./to_triples > $rdf_file" );
+
+		# If the script went direct to triples, create an inside-the-box report
+		
+#		print $LODP->exec_cmd( "Create ITB Report", "/var/wwwsites/tools/Inside-the-Box/bin/itb $rdf_file > summary.html" );
 	}
 	else
 	{
@@ -259,6 +266,10 @@ elsif( -e "./to_rdfxml" or -e "./to_triples" )
 		$tmp_files{$rdf_file} = 1;
 		print $LODP->exec_cmd( "Create Triples as RDF/XML", "./to_rdfxml" );
 	}
+
+
+	# Add Provenance
+
 	my $prov_file = "$tmp_dir/data.prov.ttl.$$";
 	$tmp_files{$prov_file} = 1;
 	open( PROV, ">:utf8", "$prov_file" ) || die "Couldn't write provenance triples to '$prov_file' $!";
@@ -318,6 +329,8 @@ elsif( -e "./to_rdfxml" or -e "./to_triples" )
 	# TODO add sourceDataset and agent
 
 	my $bp_url = "http://data.southampton.ac.uk/dataset/$subset_id.boilerplate.rdf";
+	# If there's a metadata.ttl or metadata.rdf file in the directory, use that in preference to the 
+	# version from the sparql.
 
 	# add boilerplate and publish as RDF
 	my $cmd = "( ";
