@@ -370,7 +370,7 @@ close HASHES;
 {
 	my $cmd;
 	
-	$cmd = "sparql_import $subset_id";
+	$cmd = "/var/wwwsites/bin/sparql_import $subset_id";
 	$LODP->exec_cmd( "queue sparql import", $cmd );
 	
 #	# update ckan 	

@@ -716,7 +716,10 @@ sub process_row
 					if( $type eq "md5" )
 					{
 						use Digest::MD5 qw(md5 md5_hex md5_base64);;
-						$attrs.=" md5='".md5_hex($value)."'";
+						use utf8;
+						my $bytes = $value;
+						utf8::encode($bytes);
+						$attrs.=" md5='".md5_hex($bytes)."'";
 					}
 					elsif( $type eq "sha1" )
 					{
