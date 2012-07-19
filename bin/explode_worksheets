@@ -1,20 +1,50 @@
 #!/usr/bin/perl -I perl_lib/
 
 # License: GPL
-# Copyright: University of Southampton 2011
+# Copyright: University of Southampton 2011,2012
 # Author: Christopher Gutteridge; http://id.ecs.soton.ac.uk/person/1248
 
 use strict;
 use warnings;
-use Spreadsheet::ParseExcel; 
 
 my $in = $ARGV[0];
+my $format = "xls";
+if( $in=~m/\.xlsx$/ ) { $format = "xlsx"; }
 
-my $parser = Spreadsheet::ParseExcel->new();
-my $workbook = $parser->parse( $in );
-if ( !defined $workbook ) 
+my $workbook;
+
+if( $format eq "xlsx" )
 {
-	die "Failed to parse Excel file: ".$parser->error();
+	if( ! eval 'use Spreadsheet::XLSX; 1;' ) 
+	{
+		error( "Failed to load Perl Module: Spreadsheet::XLSX: $@" );
+	}	
+	if( ! eval 'use Text::Iconv; 1;' ) 
+	{
+		error( "Failed to load Perl Module: Text::Iconv: $@" );
+	}	
+ 	my $converter = Text::Iconv -> new ("utf-8", "windows-1251");
+	
+	no warnings; 
+	$workbook = Spreadsheet::XLSX->new( $in, $converter );
+	use warnings; 
+	if ( !defined $workbook ) 
+	{
+		error( "Failed to parse XLSX file $in." );
+	}
+}
+else
+{
+	if( ! eval 'use Spreadsheet::ParseExcel; 1;' ) 
+	{
+		error( "Failed to load Perl Module: Spreadsheet::ParseExcel: $@" );
+	}	
+	my $parser = Spreadsheet::ParseExcel->new();
+	$workbook = $parser->parse( $in );
+	if ( !defined $workbook ) 
+	{
+		die "Failed to parse Excel file: ".$parser->error();
+	}
 }
 
 my @worksheets = $workbook->worksheets();
@@ -42,4 +72,13 @@ for( my $i=0;$i<scalar @worksheets;++$i )
 	}
 
 	close OUT;
+}
+exit;
+
+sub error
+{
+	my( $msg ) = @_;
+
+	print STDERR "$msg\n";
+	exit 1;
 }

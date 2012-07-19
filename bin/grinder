@@ -810,14 +810,13 @@ sub process_excelx
 {
 	my( $self, $in_fn, $out, $prefix, $worksheet_number ) = @_;
 
-	#if( ! eval 'use Spreadsheet::ParseExcel; 1;' ) 
 	if( ! eval 'use Spreadsheet::XLSX; 1;' ) 
 	{
-		$self->error( "Failed to load Perl Module: Spreadsheet::ParseExcel: $@" );
+		$self->error( "Failed to load Perl Module: Spreadsheet::XLSX: $@" );
 	}	
 	if( ! eval 'use Text::Iconv; 1;' ) 
 	{
-		$self->error( "Failed to load Perl Module: Spreadsheet::ParseExcel: $@" );
+		$self->error( "Failed to load Perl Module: Text::Iconv: $@" );
 	}	
  	my $converter = Text::Iconv -> new ("utf-8", "windows-1251");
 	
