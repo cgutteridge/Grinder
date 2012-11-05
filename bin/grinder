@@ -1,4 +1,4 @@
-#!/usr/bin/perl -I perl_lib
+#!/usr/bin/perl 
 
 # TODO: syntax in XSLT to check required constants are SET
 
@@ -6,6 +6,8 @@
 # Copyright: University of Southampton 2011
 # Author: Christopher Gutteridge; http://id.ecs.soton.ac.uk/person/1248
 
+use FindBin;
+use lib "$FindBin::Bin/../perl_lib";
 
 use strict;
 use warnings;
