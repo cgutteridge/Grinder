@@ -599,7 +599,7 @@ sub process_row
 		{
 			$self->{parse}->{set}->{$cells->[1]} = $cells->[2];
 		}
-		elsif( $cells->[0] eq "*COMMENT" )
+		elsif( $cells->[0] =~ m/^\*COMMENT/ )
 		{
 			;
 		}
