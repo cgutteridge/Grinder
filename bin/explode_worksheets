@@ -10,9 +10,97 @@ use lib "$FindBin::Bin/../perl_lib";
 use strict;
 use warnings;
 
+use Getopt::Long;
+
+my %options = ( 
+	worksheet=>undef,
+	output=>"csv",
+);
+
+Getopt::Long::Configure("permute");
+
+my $outputs = {
+	"csv"=>{
+		suffix=>"csv",
+		fn_open  => \&open_utf8,
+		fn_close => \&close_utf8,
+		fn_write_row => \&write_csv_row,
+	},
+	"tsv"=>{
+		suffix=>"tsv",
+		fn_open  => \&open_utf8,
+		fn_close => \&close_utf8,
+		fn_write_row => \&write_tsv_row,
+	},
+};
+
+my $show_help;
+my $show_version;
+my $verbose;
+my $quiet;
+GetOptions( 
+	'help|?' => \$show_help,
+	'version' => \$show_version,
+
+	'verbose+' => \$verbose,
+	'quiet' => \$quiet,
+
+	'worksheet=i' => \$options{"worksheet"},
+	'output=s' => \$options{"output"},
+) || show_usage();
+#use Data::Dumper;print Dumper( \%options );exit;
+
+sub show_help 
+{
+	print "$0 filename.xls\n";
+	print "$0 --worksheet N filename.xls > out.csv\n";
+	exit;
+}
+sub show_usage 
+{
+	print <<END;
+
+To explode an excel file into it's worksheets as CSV:
+$0 filename.xls
+... will produce filename.xls.1.csv, filename.xls.2.csv, filename.xls.3.csv, ...
+
+Option --worksheet N
+$0 --worksheet 3 filename.xls 
+... will stream the 3rd worksheet in the spreadsheet to STDOUT as CSV.
+
+Option --output FORMAT 
+  for tab seperated values. If exploding files will be named
+  .tsv instead of .csv
+  Supported output formats: csv, tsv
+  tsv format is lossy as it will convert \\n \\r and \\t in the cells into 
+  normal spaces.
+
+END
+	exit;
+}
+
+show_version() if $show_version;
+
+show_help() if $show_help;
+
+show_usage() if( !defined $outputs->{ $options{output} } );
+
+my $output = $outputs->{ $options{output} };
+
+show_usage() if( scalar @ARGV != 1 ); 
+
+$options{noise} = 0 if( $quiet );
+$options{noise} = 1+$verbose if( $verbose );
+
+
 my $in = $ARGV[0];
+
+
 my $format = "xls";
 if( $in=~m/\.xlsx$/ ) { $format = "xlsx"; }
+
+
+
 
 my $workbook;
 
@@ -51,11 +139,77 @@ else
 }
 
 my @worksheets = $workbook->worksheets();
-for( my $i=0;$i<scalar @worksheets;++$i )
+
+if( defined $options{worksheet} && $options{worksheet} )
 {
-	my $worksheet = $worksheets[$i];	
-	my $fn= "$in.".($i+1).".csv";
-	open( OUT, ">$fn") || die "Can't write $fn: $!";
+	# stream single worksheet to STDOUT
+	output_worksheet( $worksheets[ $options{worksheet}-1 ], *STDOUT, $output->{fn_write_row} );
+}
+else
+{
+	# normal explode
+	for( my $i=0;$i<scalar @worksheets;++$i )
+	{
+		my $worksheet = $worksheets[$i];	
+		my $fn= "$in.".($i+1).".".$output->{suffix};
+		my $fh = &{$output->{fn_open}}( $fn );
+		output_worksheet( $worksheets[ $i ], $fh, $output->{fn_write_row} );
+		&{$output->{fn_close}}($fh);
+		close $fh;
+	}
+}
+
+exit;
+
+sub write_tsv_row
+{
+	my( $fh, $cells ) = @_;
+
+	my @cleaned_cells = ();
+	foreach my $cell ( @$cells ) 
+	{
+		$cell = "" if !defined $cell;
+		$cell =~ s/[\t\n\r]/ /g;
+		push @cleaned_cells, $cell;
+	}
+
+	print $fh join( "\t", @cleaned_cells )."\n";
+}
+
+
+sub write_csv_row
+{
+	my( $fh, $cells ) = @_;
+
+	my @cleaned_cells = ();
+	foreach my $cell ( @$cells ) 
+	{
+		$cell =~ s/"/""/g;
+		push @cleaned_cells, '"'.$cell.'"';
+	}
+
+	print $fh join( ',', @cleaned_cells )."\n";
+}
+
+sub open_utf8
+{
+	my( $filename ) = @_;
+
+	open( my $fh, ">:utf8", $filename ) || die "Can't write $filename: $!";
+	return $fh;
+}
+
+sub close_utf8
+{
+	my( $fh ) = @_;
+
+	close $fh;
+}
+
+sub output_worksheet
+{
+	my( $worksheet, $fh, $fn_write_row ) = @_;
+	
 	my ( $row_min, $row_max ) = $worksheet->row_range();
 	my ( $col_min, $col_max ) = $worksheet->col_range();
 	
@@ -65,18 +219,15 @@ for( my $i=0;$i<scalar @worksheets;++$i )
 		for my $col ( 0 .. $col_max ) 
 		{
 			my $cell = $worksheet->get_cell( $row, $col );
-			my $v;
-			if( $cell ) { $v =  $cell->value; }
-			$v="" if !defined $v;
-			$v=~s/"/""/g;
-			push @cells, '"'.$v.'"';
+			my $value= "";
+			if( $cell ) { $value = $cell->value; }
+			# not checking for undef, individual writers may
+			# want to use undef and "" 
+			push @cells, $value;
 		}
-		print OUT join(",",@cells)."\n";
+		&{$fn_write_row}( $fh, \@cells );
 	}
-
-	close OUT;
 }
-exit;
 
 sub error
 {
